@@ -1,0 +1,29 @@
+{
+ "v": 1,
+ "id": "b39gaxf9",
+ "title": "测试",
+ "created": "2026-09-18",
+ "steps": [
+  {
+   "img": "wydpvv.webp",
+   "w": 1288,
+   "h": 88,
+   "title": "",
+   "text": "第一步"
+  },
+  {
+   "img": "xfxcbd.webp",
+   "w": 1600,
+   "h": 861,
+   "title": "",
+   "text": "第二步\n"
+  },
+  {
+   "img": "z8fxnv.webp",
+   "w": 1600,
+   "h": 861,
+   "title": "",
+   "text": "第三步"
+  }
+ ]
+}
