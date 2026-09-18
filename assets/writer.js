@@ -389,6 +389,60 @@
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  /* ── 把设置搬到手机（二维码） ──────────────────────
+     设置存在 localStorage 里，按「设备+浏览器」隔离，本来就传不过去；
+     这里走二维码：内容放在 URL 的 # 后面，#之后的部分浏览器不会发给服务器，
+     也不会进 Referer。手机读完立刻把它从地址栏抹掉。 */
+  const b64url = str => btoa(String.fromCharCode(...new TextEncoder().encode(str)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unb64url = s2 => new TextDecoder().decode(Uint8Array.from(
+    atob(s2.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)));
+
+  function cfgToUrl() {
+    const payload = JSON.stringify({ o: cfg.owner, r: cfg.repo, b: cfg.branch, t: cfg.token });
+    return `${siteRoot()}w/#cfg=${b64url(payload)}`;
+  }
+
+  function showQr() {
+    if (!cfg.owner || !cfg.repo || !cfg.token) { alert('先把上面四项填好并保存，再生成二维码'); return; }
+    const url = cfgToUrl();
+    const qr = qrcode(0, 'L');            // 0 = 自动选版本；L 级纠错，容量最大
+    qr.addData(url);
+    qr.make();
+    $('#qr-img').src = qr.createDataURL(6, 2);
+    $('#qr-warn').textContent =
+      `⚠️ 这张码里含 token，等于这个仓库的写权限（${qr.getModuleCount()}×${qr.getModuleCount()} 格）。` +
+      '别让旁人拍到、也别截图发出去，用完就关掉。';
+    $('#dlg-qr').showModal();
+  }
+
+  /** 手机扫码打开后：先给人看清楚要导入什么，确认了才写进这台设备 */
+  function importFromHash() {
+    const m = /^#cfg=(.+)$/.exec(location.hash);
+    if (!m) return false;
+    // 不管用户点什么，先把地址栏里的 token 抹掉，别留在历史记录里
+    history.replaceState(null, '', location.pathname + location.search);
+    let p;
+    try { p = JSON.parse(unb64url(m[1])); } catch (e) { alert('这个二维码读不出来（可能扫串了）'); return false; }
+    if (!p || !p.t) { alert('这个二维码里没有 token'); return false; }
+    const mask = p.t.length > 16 ? p.t.slice(0, 11) + '…' + p.t.slice(-4) : '（已隐藏）';
+    $('#imp-kv').innerHTML =
+      `<div><b>GitHub 用户名</b><code>${esc(p.o || '')}</code></div>` +
+      `<div><b>仓库</b><code>${esc(p.r || '')}</code></div>` +
+      `<div><b>分支</b><code>${esc(p.b || 'main')}</code></div>` +
+      `<div><b>Token</b><code>${esc(mask)}</code></div>`;
+    $('#btn-imp-yes').onclick = () => {
+      cfg.owner = p.o || ''; cfg.repo = p.r || 'Step-Guides';
+      cfg.branch = p.b || 'main'; cfg.token = p.t;
+      saveCfg();
+      $('#dlg-import').close();
+      alert('设置已导入这台设备，可以直接发布了');
+    };
+    $('#btn-imp-no').onclick = () => $('#dlg-import').close();
+    $('#dlg-import').showModal();
+    return true;
+  }
+
   /* ── 设置 ─────────────────────────────────────────── */
   function openSettings() {
     $('#f-owner').value = cfg.owner || '';
@@ -488,9 +542,14 @@
       $('#f-token').value = '';
       alert('token 已从这台设备清除');
     };
+    $('#btn-qr').onclick = showQr;
+    $('#btn-qr-close').onclick = () => { $('#qr-img').src = ''; $('#dlg-qr').close(); };
     $('#btn-publish').onclick = doPublish;
     $('#btn-export').onclick = exportOne;
     $('#btn-mine').onclick = () => location.href = '../mine/';
+
+    // 扫码进来的先处理导入（它只改设置，不碰草稿）
+    importFromHash();
 
     // 启动：?edit=<id> 优先，其次问要不要接着上次的草稿
     const editId = new URLSearchParams(location.search).get('edit');
@@ -502,7 +561,7 @@
   }
 
   // 给验证脚本用的测试口（也方便自己在控制台里手动检查状态）
-  window.SGWriter = { addFiles, render, get draft() { return draft; } };
+  window.SGWriter = { addFiles, render, b64url, unb64url, cfgToUrl, get draft() { return draft; } };
 
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', boot) : boot();
 })();

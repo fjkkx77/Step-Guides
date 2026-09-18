@@ -19,7 +19,17 @@
 5. 生成后复制，打开 `/w/` 点右上角 ⚙，填 GitHub 用户名、仓库名、分支、token，保存
 
 token 只存在这台设备的浏览器里（localStorage），不会上传到任何地方。
-换设备要重新填一次。万一泄露，去 GitHub 上点一下吊销即可——它碰不到你其它仓库。
+万一泄露，去 GitHub 上点一下吊销即可——它碰不到你其它仓库。
+
+### 换一台设备（比如手机）怎么办
+
+localStorage 按「设备 + 浏览器」隔离，所以每台设备要填一次。两条路：
+
+1. **推荐**：在手机上单独建一个 token（名字写 `教程站-手机`）。手机丢了只吊销这一个。
+2. **省事**：电脑上 ⚙ → 「📱 生成二维码，给手机扫」→ 手机扫码 → 确认导入。
+   设置放在 URL 的 `#` 后面，**`#` 之后的内容浏览器不会发给服务器、也不进 Referer**；
+   手机读到后立刻把它从地址栏抹掉，确认框里 token 是打码显示的。
+   代价是这张码等于仓库写权限，**别让旁人拍到、别截图外发**。
 
 ## 怎么写一份教程
 
@@ -50,7 +60,12 @@ node tools/verify.js t/qhftq5kz/ --mode=long  # 长文模式
 node tools/verify-writer.js               # 写作页三档
 node tools/verify.js t/qhftq5kz/ --base=https://fjkkx77.github.io/Step-Guides/   # 直接验线上
 node tools/smoke-publish.js               # 真发一次再删掉（验原子提交+跨域+删除路径）
+node tools/verify-qr.js                   # 二维码：用独立解码器 jsQR 交叉验 + 扫码后的导入流程
 ```
+
+`assets/vendor/qrcode.js` 是 qrcode-generator 2.0.4（MIT）原样放进来的，不走 CDN。
+`tools/vendor/jsqr.js` 是 jsQR 1.4.0（Apache-2.0），**只在验证时注入，不进产品页面**——
+用生成器自己验自己没意义，必须拿另一套独立实现交叉验。
 
 验证用的是真实窄屏视口（headless Chrome + CDP），不是注入 CSS 假装断点。
 

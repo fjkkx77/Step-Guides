@@ -51,6 +51,35 @@
       <button class="tap" id="btn-cancel-set" type="button">取消</button>
       <button class="tap go" id="btn-save-set" type="button">保存</button>
     </div>
+    <div class="row">
+      <button class="tap" id="btn-qr" type="button">📱 生成二维码，给手机扫</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 二维码：把这台设备的设置搬到手机 -->
+<dialog id="dlg-qr">
+  <div class="sheet">
+    <h2>用手机扫这个码</h2>
+    <p>手机相机对准它，打开弹出的链接，确认一下就填好了。
+       数据只在这张图里，<b>不经过任何服务器</b>。</p>
+    <div class="qrbox"><img id="qr-img" alt="设置二维码"></div>
+    <p class="warn" id="qr-warn">⚠️ 这张码里含 token，等于这个仓库的写权限。
+       别让旁人拍到、也别截图发出去，用完就关掉。</p>
+    <div class="row"><button class="tap go" id="btn-qr-close" type="button">关掉</button></div>
+  </div>
+</dialog>
+
+<!-- 手机扫码后的确认 -->
+<dialog id="dlg-import">
+  <div class="sheet">
+    <h2>导入发布设置？</h2>
+    <p>从二维码里读到了下面这份设置，确认无误就导入到这台设备。</p>
+    <div class="kv" id="imp-kv"></div>
+    <div class="row">
+      <button class="tap" id="btn-imp-no" type="button">不导入</button>
+      <button class="tap go" id="btn-imp-yes" type="button">导入并保存</button>
+    </div>
   </div>
 </dialog>
 
@@ -78,6 +107,7 @@
   </div>
 </dialog>
 
+<script src="../assets/vendor/qrcode.js"></script>
 <script src="../assets/img.js"></script>
 <script src="../assets/github.js"></script>
 <script src="../assets/store.js"></script>

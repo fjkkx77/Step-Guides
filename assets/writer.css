@@ -143,3 +143,26 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   border:1px solid var(--line);background:var(--bg);color:var(--ink);
 }
 .stack button.danger{color:#c1121f}
+
+
+/* ── 二维码搬设置 ─────────────────────────────────── */
+.qrbox{
+  display:flex;justify-content:center;padding:14px;border-radius:14px;
+  background:#fff;                     /* 扫码要高对比：不跟随深色主题 */
+  border:1px solid var(--line);
+}
+.qrbox img{
+  width:min(260px,62vw);height:auto;
+  image-rendering:pixelated;           /* 放大后边缘要硬，糊了扫不出来 */
+}
+.warn{
+  margin-top:12px !important;
+  color:#b54708;font-size:13px;line-height:1.7;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .warn{color:#fdb022} }
+.kv{
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;font-size:15px;line-height:1.9;
+}
+.kv b{color:var(--muted);font-weight:400;display:inline-block;min-width:5.2em}
+.kv code{font-size:14px;word-break:break-all}
