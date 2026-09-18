@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111114" media="(prefers-color-scheme: dark)">
+<title>图文教程</title>
+<link rel="stylesheet" href="assets/base.css">
+<style>
+  body{display:flex;flex-direction:column;justify-content:center;min-height:100dvh;padding:24px 18px}
+  .wrap{max-width:420px;margin:0 auto;width:100%}
+  h1{font-size:24px;margin:0 0 6px}
+  p{color:var(--muted);font-size:15px;line-height:1.75;margin:0 0 22px}
+  a.big{
+    display:flex;align-items:center;justify-content:space-between;
+    height:var(--tap);padding:0 16px;margin-bottom:10px;border-radius:14px;
+    background:var(--card);border:1px solid var(--line);color:var(--ink);
+    text-decoration:none;font-size:17px;
+  }
+  a.big.go{background:var(--brand);color:#fff;border-color:transparent;font-weight:600}
+  .tip{font-size:13px;color:var(--muted);line-height:1.8;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>图文教程</h1>
+  <p>把截图和说明写成一步一屏的教程，发一条链接给对方，点开就能跟着做。</p>
+  <a class="big go" href="w/">写一份新教程 <span>›</span></a>
+  <a class="big" href="mine/">我发布过的教程 <span>›</span></a>
+  <a class="big" href="t/demo/">看个例子 <span>›</span></a>
+  <p class="tip">教程链接是随机字符串，猜不到、也不会被搜索引擎收录；
+     但拿到链接的人都能看，所以别放真正敏感的东西。</p>
+</div>
+</body>
+</html>
