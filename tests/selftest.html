@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>自检</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  body{padding:20px;max-width:760px;margin:0 auto}
+  h1{font-size:20px}
+  li{margin:6px 0;font-size:15px;line-height:1.5;list-style:none}
+  .p::before{content:'PASS ';color:#1a7f37;font-weight:700}
+  .f::before{content:'FAIL ';color:#c1121f;font-weight:700}
+  .f{color:#c1121f}
+  code{background:rgba(120,120,130,.14);padding:1px 5px;border-radius:5px}
+  #sum{margin:14px 0;font-weight:600}
+</style>
+</head>
+<body>
+<h1>自检 · 打开即跑</h1>
+<p class="hint">纯函数和压缩逻辑的判据都在这里。改了 <code>img.js</code> / <code>github.js</code> 先跑这一页。</p>
+<div id="sum">跑起来了…</div>
+<ul id="out"></ul>
+
+<script src="../assets/img.js"></script>
+<script src="../assets/github.js"></script>
+<script>
+(async () => {
+  const out = document.getElementById('out');
+  const results = [];
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  function t(name, fn) {
+    return Promise.resolve().then(fn).then(r => {
+      const ok = r === true || r === undefined;
+      results.push({ name, ok: !!ok, detail: ok ? '' : String(r) });
+    }).catch(e => results.push({ name, ok: false, detail: e.message }));
+  }
+
+  const { pickSize, compress, toBase64 } = window.SGImg;
+
+  // ── 压缩尺寸规则 ─────────────────────────────────
+  await t('pickSize：小图不放大（412×915 原样）', () =>
+    eq(pickSize(412, 915), { w: 412, h: 915, scaled: false }) || JSON.stringify(pickSize(412, 915)));
+
+  await t('pickSize：竖图按长边缩到 1600', () => {
+    const r = pickSize(1170, 2532);
+    return (r.h === 1600 && r.w === 739 && r.scaled === true) || JSON.stringify(r);
+  });
+
+  await t('pickSize：横图也按长边缩', () => {
+    const r = pickSize(3000, 1000);
+    return (r.w === 1600 && r.h === 533) || JSON.stringify(r);
+  });
+
+  await t('pickSize：正好等于上限不缩', () =>
+    pickSize(1600, 800).scaled === false || '边界被多缩了一次');
+
+  await t('pickSize：尺寸非法要报错', () => {
+    try { pickSize(0, 100); return '没有报错'; } catch (e) { return true; }
+  });
+
+  await t('pickSize：max 是参数不是写死的', () => {
+    const r = pickSize(1000, 500, 400);
+    return (r.w === 400 && r.h === 200) || JSON.stringify(r);
+  });
+
+  // ── 真实压缩一张样例截图 ──────────────────────────
+  let sample = null;
+  await t('取样例图 t/demo/i/01.webp', async () => {
+    const r = await fetch('../t/demo/i/01.webp');
+    if (!r.ok) return 'HTTP ' + r.status;
+    sample = await r.blob();
+    return true;
+  });
+
+  await t('compress：412 宽的截图宽高不变', async () => {
+    const r = await compress(sample);
+    return (r.w === 412 && r.h === 915 && r.scaled === false) || JSON.stringify(r);
+  });
+
+  await t('compress：产出 ≤200KB', async () => {
+    const r = await compress(sample);
+    const kb = r.blob.size / 1024;
+    return kb <= 200 || (kb.toFixed(1) + 'KB 超标');
+  });
+
+  await t('compress：产出类型是 webp 或 jpg', async () => {
+    const r = await compress(sample);
+    return ['webp', 'jpg'].includes(r.ext) || r.ext;
+  });
+
+  await t('toBase64：可还原出同样长度', async () => {
+    const b64 = await toBase64(sample);
+    const back = atob(b64);
+    return back.length === sample.size || `${back.length} vs ${sample.size}`;
+  });
+
+  // ── GitHub 提交载荷组装 ───────────────────────────
+  const { buildTree, randomId } = window.SGGitHub;
+
+  await t('buildTree：每项形如 {path,mode,type,sha}', () => {
+    const tree = buildTree([
+      { path: 't/ab/data.json', sha: 'aaa' },
+      { path: 't/ab/i/01.webp', sha: 'bbb' }
+    ]);
+    return eq(tree, [
+      { path: 't/ab/data.json', mode: '100644', type: 'blob', sha: 'aaa' },
+      { path: 't/ab/i/01.webp', mode: '100644', type: 'blob', sha: 'bbb' }
+    ]) || JSON.stringify(tree);
+  });
+
+  await t('buildTree：去掉前导斜杠（GitHub 不接受）', () => {
+    const tree = buildTree([{ path: '/t/ab/x.json', sha: 'c' }]);
+    return tree[0].path === 't/ab/x.json' || tree[0].path;
+  });
+
+  await t('buildTree：删除用 sha:null 表示', () => {
+    const tree = buildTree([{ path: 't/ab/old.webp', sha: null }]);
+    return (tree[0].sha === null && tree[0].mode === '100644') || JSON.stringify(tree[0]);
+  });
+
+  await t('randomId：8 位且不含易混字符 0o1lI', () => {
+    for (let i = 0; i < 200; i++) {
+      const id = randomId();
+      if (id.length !== 8) return '长度 ' + id.length;
+      if (/[0o1lI]/.test(id)) return '含易混字符：' + id;
+    }
+    return true;
+  });
+
+  await t('randomId：200 次不重复', () => {
+    const s = new Set();
+    for (let i = 0; i < 200; i++) s.add(randomId());
+    return s.size === 200 || ('重复了 ' + (200 - s.size) + ' 个');
+  });
+
+  // ── 输出 ─────────────────────────────────────────
+  out.innerHTML = results.map(r =>
+    `<li class="${r.ok ? 'p' : 'f'}">${r.name}${r.detail ? ' — ' + r.detail : ''}</li>`).join('');
+  const bad = results.filter(r => !r.ok).length;
+  document.getElementById('sum').textContent =
+    bad ? `${results.length} 条里有 ${bad} 条没过` : `全部 ${results.length} 条通过`;
+  window.__results = results;   // 给 node 跑脚本读
+})();
+</script>
+</body>
+</html>

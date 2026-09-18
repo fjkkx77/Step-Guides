@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111114" media="(prefers-color-scheme: dark)">
+<title>写教程</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/writer.css">
+</head>
+<body>
+
+<header class="wtop">
+  <input id="title" type="text" placeholder="教程标题，例如：教你设置专注模式" autocomplete="off">
+  <button class="iconbtn tap" id="btn-settings" type="button" aria-label="设置">⚙</button>
+</header>
+
+<main class="list" id="list"></main>
+
+<div class="addzone" id="addzone">
+  <b>把截图放进来</b>
+  <span id="addhint">点下面的按钮选图，或直接 Ctrl+V 粘贴、拖进来</span>
+  <div><label class="addbtn tap" for="pick">＋ 选择图片</label></div>
+  <input id="pick" type="file" accept="image/*" multiple hidden>
+</div>
+
+<footer class="wbottom">
+  <button class="tap" id="btn-mine" type="button">我的教程</button>
+  <button class="tap" id="btn-export" type="button">导出备份</button>
+  <button class="tap go" id="btn-publish" type="button">发布</button>
+</footer>
+
+<!-- 设置：仓库与 token -->
+<dialog id="dlg-settings">
+  <div class="sheet">
+    <h2>发布设置</h2>
+    <p>token 只存在这台设备的浏览器里，不会上传。建议用 fine-grained token，
+       权限只勾这一个仓库的 <b>Contents: Read and write</b>，随时可以在 GitHub 上吊销。</p>
+    <div class="field"><label for="f-owner">GitHub 用户名</label>
+      <input id="f-owner" type="text" autocomplete="off" placeholder="fjkkx77"></div>
+    <div class="field"><label for="f-repo">仓库名</label>
+      <input id="f-repo" type="text" autocomplete="off" placeholder="Step-Guides"></div>
+    <div class="field"><label for="f-branch">分支</label>
+      <input id="f-branch" type="text" autocomplete="off" placeholder="main"></div>
+    <div class="field"><label for="f-token">Token</label>
+      <input id="f-token" type="password" autocomplete="off" placeholder="github_pat_…"></div>
+    <div class="row">
+      <button class="tap danger" id="btn-forget" type="button">清除 token</button>
+      <button class="tap" id="btn-cancel-set" type="button">取消</button>
+      <button class="tap go" id="btn-save-set" type="button">保存</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 单步操作 -->
+<dialog id="dlg-more">
+  <div class="sheet">
+    <h2 id="m-title">第 1 步</h2>
+    <p>移到第几步（点数字）</p>
+    <div class="chips" id="m-chips"></div>
+    <div class="stack">
+      <button class="tap" id="m-swap" type="button">换一张图</button>
+      <button class="tap danger" id="m-del" type="button">删除这一步</button>
+      <button class="tap" id="m-cancel" type="button">取消</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 发布进度 -->
+<dialog id="dlg-prog">
+  <div class="prog">
+    <div class="big" id="p-title">正在发布…</div>
+    <div class="bar"><i id="p-fill"></i></div>
+    <div class="msg" id="p-msg">准备中</div>
+    <div class="row" id="p-row" hidden></div>
+  </div>
+</dialog>
+
+<script src="../assets/img.js"></script>
+<script src="../assets/github.js"></script>
+<script src="../assets/store.js"></script>
+<script src="../assets/writer.js"></script>
+</body>
+</html>

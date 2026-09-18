@@ -40,7 +40,7 @@
 
       const shot = el('div', 'shot');
       const img = new Image();
-      img.src = 'i/' + s.img;
+      img.src = s.src || ('i/' + s.img);
       // width/height 属性让浏览器提前按比例留位，图片加载出来不会把文字顶走
       if (s.w && s.h) { img.width = s.w; img.height = s.h; }
       img.alt = `第 ${i + 1} 步的截图`;
@@ -167,8 +167,11 @@
     const dlg = $('#zoom');
     dlg.addEventListener('click', e => { if (e.target !== $('#zoomimg')) dlg.close(); });
 
-    fetch('data.json', { cache: 'no-cache' })
-      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    // 导出的单文件版把数据内嵌在 window.__DATA，不再去取 data.json
+    (window.__DATA
+      ? Promise.resolve(window.__DATA)
+      : fetch('data.json', { cache: 'no-cache' })
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }))
       .then(render)
       .catch(err => {
         $('#deck').replaceChildren(
