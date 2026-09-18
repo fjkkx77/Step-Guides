@@ -8,7 +8,7 @@ const FILL = `(async () => {
   const names = ['01.webp','04.webp','09.webp'];
   const files = [];
   for (const n of names) {
-    const b = await fetch('../t/demo/i/' + n).then(r => r.blob());
+    const b = await fetch('../t/qhftq5kz/i/' + n).then(r => r.blob());
     files.push(new File([b], n, { type: b.type }));
   }
   await window.SGWriter.addFiles(files);

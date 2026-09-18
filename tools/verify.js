@@ -7,7 +7,7 @@ const PORT = 8879;
 const WIDTHS = [320, 390, 430];
 const HEIGHT = { 320: 568, 390: 844, 430: 932 };   // 各档常见的真实高度
 
-let page = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 't/demo/';
+let page = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 't/qhftq5kz/';
 // Git Bash 会把以 / 开头的参数改写成 Windows 路径，统一按「相对站点根」处理
 page = '/' + String(page).replace(/^[A-Za-z]:.*?[\\/](?=t\/|w\/|mine\/|$)/, '').replace(/^\/+/, '');
 const SHOTS = process.argv.includes('--shots');

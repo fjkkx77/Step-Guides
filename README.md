@@ -5,7 +5,7 @@
 - 写作页：`/w/`（电脑、手机都能从头写）
 - 教程库：`/mine/`
 - 一份教程：`/t/<随机8位>/`
-- 例子：`/t/demo/`
+- 例子：`/t/qhftq5kz/`（随机路径，不是 demo——样例里有真人信息）
 
 ## 第一次使用：建一个 token
 
@@ -45,10 +45,10 @@ token 只存在这台设备的浏览器里（localStorage），不会上传到�
 ```bash
 node tools/mock.js "<仓库目录>" 8879 &   # 本地静态服务（目录->index.html，跟 Pages 行为一致）
 node tools/selftest.js                   # 纯函数 + 压缩自检（16 条）
-node tools/verify.js t/demo/ --shots      # 阅读页三档真实视口
-node tools/verify.js t/demo/ --mode=long  # 长文模式
+node tools/verify.js t/qhftq5kz/ --shots      # 阅读页三档真实视口
+node tools/verify.js t/qhftq5kz/ --mode=long  # 长文模式
 node tools/verify-writer.js               # 写作页三档
-node tools/verify.js t/demo/ --base=https://fjkkx77.github.io/Step-Guides/   # 直接验线上
+node tools/verify.js t/qhftq5kz/ --base=https://fjkkx77.github.io/Step-Guides/   # 直接验线上
 node tools/smoke-publish.js               # 真发一次再删掉（验原子提交+跨域+删除路径）
 ```
 
