@@ -11,6 +11,8 @@ let page = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2
 // Git Bash 会把以 / 开头的参数改写成 Windows 路径，统一按「相对站点根」处理
 page = '/' + String(page).replace(/^[A-Za-z]:.*?[\\/](?=t\/|w\/|mine\/|$)/, '').replace(/^\/+/, '');
 const SHOTS = process.argv.includes('--shots');
+// --base=https://user.github.io/Repo/ 可以直接验线上（子路径部署很容易出相对路径问题）
+const BASE = (process.argv.find(a => a.startsWith('--base=')) || '').split('=').slice(1).join('=');
 const MODE = (process.argv.find(a => a.startsWith('--mode=')) || '').split('=')[1] || '';
 
 const SAME_SCREEN = `(async () => {
@@ -48,7 +50,13 @@ const probes = {
       if (!bs.length) return null;
       return Math.min(...bs.map(b => { const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); }));
     })()`,
-  sameScreen: SAME_SCREEN
+  sameScreen: SAME_SCREEN,
+  // 子路径部署时相对路径最容易出错：CSS 没加载页面照样"能看"，但布局全错
+  assetsOk: `(() => {
+      const styled = getComputedStyle(document.querySelector('.deck') || document.body).display === 'flex';
+      const jsRan = !!document.querySelector('.page');
+      return { styled, jsRan };
+    })()`
 };
 
 (async () => {
@@ -56,10 +64,11 @@ const probes = {
   for (const w of WIDTHS) {
     const h = HEIGHT[w] || 844;
     const c = await open(w, h, 2);
-    await c.goto(`http://127.0.0.1:${PORT}${page}`);
+    const target = BASE ? BASE.replace(/\/$/, '') + page : `http://127.0.0.1:${PORT}${page}`;
+    await c.goto(target);
     if (MODE) {
       await c.ev(`localStorage.setItem('sg.readMode', ${JSON.stringify(MODE)})`);
-      await c.goto(`http://127.0.0.1:${PORT}${page}`);
+      await c.goto(target);
     }
     await sleep(800);
 
@@ -74,6 +83,10 @@ const probes = {
     chk('布局视口 = ' + w, out.viewport === w, '实际 ' + out.viewport);
     chk('无横向溢出', out.scrollWidth <= w + 1, `scrollWidth=${out.scrollWidth}`);
     chk('正文 ≥16px', out.bodyFont >= 16, out.bodyFont + 'px');
+    if (out.assetsOk) {
+      chk('CSS 真的加载了', out.assetsOk.styled, JSON.stringify(out.assetsOk));
+      chk('JS 真的跑了（渲染出步骤）', out.assetsOk.jsRan, '');
+    }
     if (out.minTap != null) chk('触摸目标 ≥44px', out.minTap >= 44, '最小 ' + Math.round(out.minTap) + 'px');
     if (out.sameScreen) {
       const s = out.sameScreen;

@@ -48,6 +48,8 @@ node tools/selftest.js                   # 纯函数 + 压缩自检（16 条）
 node tools/verify.js t/demo/ --shots      # 阅读页三档真实视口
 node tools/verify.js t/demo/ --mode=long  # 长文模式
 node tools/verify-writer.js               # 写作页三档
+node tools/verify.js t/demo/ --base=https://fjkkx77.github.io/Step-Guides/   # 直接验线上
+node tools/smoke-publish.js               # 真发一次再删掉（验原子提交+跨域+删除路径）
 ```
 
 验证用的是真实窄屏视口（headless Chrome + CDP），不是注入 CSS 假装断点。
