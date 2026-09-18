@@ -1,0 +1,175 @@
+/* 阅读器：两种模式共用同一份 DOM，靠 <html data-mode> 切换版式
+   step = 一步一屏左右翻页（默认）   long = 长文流上下滑（回看用） */
+
+html,body{height:100%}
+body{display:flex;flex-direction:column;min-height:100dvh}
+
+/* ── 顶栏 ───────────────────────────────────────────── */
+.top{
+  flex:0 0 auto;
+  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;
+  background:var(--bg);
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;
+}
+.top h1{
+  flex:1;min-width:0;margin:0;font-size:16px;font-weight:600;line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.modebtn{
+  flex:0 0 auto;height:var(--tap);min-width:var(--tap);padding:0 12px;border-radius:12px;
+  font-size:14px;color:var(--brand);display:flex;align-items:center;gap:5px;
+}
+
+/* ── 步骤区 ─────────────────────────────────────────── */
+.deck{
+  flex:1;min-height:0;display:flex;
+  overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x mandatory;
+  overscroll-behavior-x:contain;      /* 滑到尽头别触发浏览器「返回上一页」 */
+  touch-action:pan-x pinch-zoom;
+  scrollbar-width:none;
+}
+.deck::-webkit-scrollbar{display:none}
+
+.page{
+  flex:0 0 100%;                       /* 用 100% 不用 100vw：桌面竖滚动条会让 100vw 溢出 */
+  scroll-snap-align:center;
+  min-width:0;min-height:0;
+  display:flex;flex-direction:column;
+  padding:8px 14px 0;
+}
+.shot{
+  flex:1;min-height:0;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+/* img 上写了 width/height 属性，浏览器据此预留比例，图片加载出来不会跳动 */
+.shot img{
+  max-height:100%;max-width:100%;width:auto;height:auto;
+  border-radius:12px;border:1px solid var(--line);
+  background:var(--shot-bg);            /* 浅色截图在深色主题下要垫白底 */
+  cursor:zoom-in;
+}
+.say{
+  flex:0 0 auto;
+  background:var(--card);border-radius:var(--radius);
+  padding:12px 14px;margin:10px 0 12px;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);
+  max-height:34vh;overflow:auto;overscroll-behavior:contain;
+}
+.say .h{display:flex;align-items:flex-start;gap:9px;margin-bottom:5px}
+.badge{
+  flex:0 0 auto;
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:26px;height:26px;padding:0 8px;border-radius:13px;
+  background:var(--brand);color:#fff;font-size:14px;font-weight:600;line-height:1;
+}
+.say h2{margin:0;font-size:17px;font-weight:600;line-height:1.4}
+.say p{margin:0;font-size:16px;line-height:1.72;color:var(--ink2);white-space:pre-wrap}
+
+/* step 模式下正文默认只给 3 行：长说明会把截图挤到看不清（320 档实测能挤到 100px 宽）。
+   想看全文点「展开」。long 模式不裁，那里本来就是拿来细看的。 */
+html[data-mode="step"] .say:not(.open) p{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
+}
+ /* 「展开」不做成小按钮：整块文字都可以点（热区远大于 44px），
+    这里只是给一个看得见的提示 */
+.more{
+  display:inline-block;margin-top:4px;
+  font-size:14px;color:var(--brand);
+}
+html[data-mode="step"] .say.can-open{cursor:pointer}
+html[data-mode="long"] .more{display:none}
+html[data-mode="step"] .say.open{max-height:52vh}
+
+/* 最后一屏的完成态：step 模式下压成一行，别跟正文抢版面 */
+.done{padding:6px 0 0;color:var(--muted);font-size:14px}
+.done b{color:var(--ink);font-weight:600}
+html[data-mode="long"] .done{text-align:center;padding:14px 0 2px;font-size:15px}
+html[data-mode="long"] .done b{display:block;font-size:19px;margin-bottom:4px}
+
+/* ── 底栏（只在 step 模式出现） ───────────────────────── */
+.bottom{
+  flex:0 0 auto;
+  display:flex;align-items:center;gap:10px;
+  padding:6px 12px calc(6px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);background:var(--bg);
+}
+.bottom button{
+  flex:1;height:var(--tap);border-radius:12px;background:var(--card);
+  border:1px solid var(--line);font-size:16px;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;gap:4px;
+}
+.count{flex:0 0 auto;min-width:64px;text-align:center;font-size:14px;color:var(--muted)}
+.bar{height:3px;background:rgba(120,120,130,.18);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--brand);border-radius:2px;transition:width .18s}
+.topbar-progress{flex:0 0 auto;padding:0 12px 6px;background:var(--bg)}
+
+/* ── long 模式：同一份 DOM，改版式 ─────────────────────── */
+html[data-mode="long"] body{display:block;min-height:0}
+html[data-mode="long"] .top{position:sticky;top:0;z-index:20}
+html[data-mode="long"] .deck{
+  display:block;overflow:visible;touch-action:auto;
+}
+html[data-mode="long"] .page{
+  width:auto;height:auto;
+  background:var(--card);border-radius:var(--radius);
+  margin:12px;padding:12px;box-shadow:0 1px 2px rgba(0,0,0,.05);
+}
+html[data-mode="long"] .shot{display:block}
+/* 长文模式本来就是靠上下滚动看的，图给到 70vh：
+   实测 42vh 时 390 档只有 161px 宽（截图里的字读不出来），70vh 能到 271px */
+html[data-mode="long"] .shot img{max-height:70vh;margin:0 auto}
+html[data-mode="long"] .say{
+  background:none;box-shadow:none;max-height:none;padding:0;margin:10px 0 0;overflow:visible;
+}
+html[data-mode="long"] .bottom,
+html[data-mode="long"] .topbar-progress{display:none}
+
+/* ── 放大层 ─────────────────────────────────────────── */
+dialog#zoom{
+  border:0;padding:0;margin:0;width:100vw;height:100dvh;max-width:100vw;max-height:100dvh;
+  background:rgba(0,0,0,.92);
+}
+dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
+#zoom .box{
+  width:100%;height:100%;overflow:auto;
+  touch-action:pinch-zoom pan-x pan-y;          /* 双指放大看清小字 */
+  display:flex;align-items:center;justify-content:center;
+}
+#zoom img{max-width:100%;background:#fff;border-radius:8px}
+#zoom .close{
+  position:fixed;top:calc(10px + env(safe-area-inset-top));right:12px;
+  width:var(--tap);height:var(--tap);border-radius:50%;
+  background:rgba(255,255,255,.18);color:#fff;font-size:22px;
+  display:flex;align-items:center;justify-content:center;
+}
+
+
+/* 矮屏：把顶栏进度行、内外边距收紧，省下来的高度全给截图。
+   断点卡在 700px 而不是某台具体设备（活参数原则） */
+@media (max-height:700px){
+  .topbar-progress{display:none}
+  .top{padding-top:calc(4px + env(safe-area-inset-top));padding-bottom:4px}
+  .top h1{font-size:15px}
+  .page{padding-top:4px}
+  .say{padding:9px 12px;margin:6px 0 8px}
+  .say h2{font-size:16px}
+  .bottom{padding-top:4px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
+  html[data-mode="step"] .say:not(.open) p{-webkit-line-clamp:2}
+}
+
+/* 矮屏（SE 这一类，568 高）：1:2.2 的竖屏截图和文字块在数学上就挤不下
+   ——把文字改成浮在截图底部的一层，整屏高度全给图。
+   这是「确实放不下」才换的形态，断点卡在 640 以下，主流机型（≥700）不受影响。 */
+@media (max-height:640px){
+  html[data-mode="step"] .page{position:relative}
+  html[data-mode="step"] .say{
+    position:absolute;left:14px;right:14px;bottom:10px;z-index:5;
+    background:color-mix(in srgb, var(--card) 88%, transparent);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    box-shadow:0 4px 20px rgba(0,0,0,.14);
+  }
+  html[data-mode="step"] .shot{padding-bottom:0}
+}

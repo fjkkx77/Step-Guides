@@ -1,0 +1,55 @@
+/* 全站共用：配色变量（深浅两套）、字号底线、若干兜底规则
+   —— 改这里，所有已发布的教程一起生效（阅读器只有一份的意义所在） */
+:root{
+  --bg:#F2F2F7;
+  --card:#FFFFFF;
+  --ink:#1C1C1E;        /* 正文 */
+  --ink2:#3A3A3C;       /* 说明文字 */
+  --muted:#6E6E73;      /* 次要标注：白底上 5.03:1，过 AA */
+  --brand:#5B57D8;
+  --line:rgba(60,60,67,.14);
+  --shot-bg:#FFFFFF;    /* 截图垫底：深浅两套都是白，浅色截图贴深色背景会晃眼 */
+  --radius:16px;
+  --tap:48px;           /* 触摸目标下限，>= Apple HIG 的 44 */
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111114;
+    --card:#1C1C20;
+    --ink:#F2F2F5;
+    --ink2:#D8D8DE;
+    --muted:#9B9BA3;
+    --brand:#8B87FF;
+    --line:rgba(255,255,255,.14);
+    --shot-bg:#FFFFFF;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111114; --card:#1C1C20; --ink:#F2F2F5; --ink2:#D8D8DE;
+  --muted:#9B9BA3; --brand:#8B87FF; --line:rgba(255,255,255,.14); --shot-bg:#FFFFFF;
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",
+       "Helvetica Neue",Arial,sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+img{display:block;max-width:100%}
+
+/* 自己声明 display 的元素必须补这条，否则 hidden 属性会被盖掉（踩过） */
+[hidden]{display:none !important}
+
+button{font:inherit;color:inherit;border:0;background:none;touch-action:manipulation}
+button:disabled{opacity:.35}
+
+/* 触屏上 :hover 会粘住，只在真有指针的设备上给 hover */
+@media (hover:hover){
+  .tap:hover{background:rgba(120,120,130,.12)}
+}
+.tap:active{background:rgba(120,120,130,.18)}
+
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
