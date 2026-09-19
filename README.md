@@ -17,6 +17,7 @@
 - **点图放大**：电脑滚轮缩放 / 双击 / 按住拖动 / 点空白处关；
   手机双指捏合 / 双击 / 拖动查看 / **向下滑关闭**（Apple 相册的做法）
 - 放大时工具栏会**自动淡出**，手机点一下画面唤回、电脑动一下鼠标唤回
+- 长文模式里顶栏**一直吸在最上面**（全部步骤/切模式随时够得着），滚远了右下角出现**回顶部**悬浮键
 
 ## 第一次使用：建一个 token
 
@@ -89,6 +90,8 @@ node tools/verify-zoom.js                 # 放大器（滚轮/双击/拖动/关
 node tools/verify-gestures.js             # 左滑删除 + 长按拖动（真实触摸事件）
 node tools/verify-nav.js [站点地址]        # 返回/主页键落在哪（每个场景一个干净浏览器）
 node tools/verify-steps.js                # 「全部步骤」面板（手机/窄屏/电脑三档）
+node tools/verify-long.js                 # 长文模式：顶栏吸顶 + 回顶部悬浮键
+node tools/verify-moveto.js               # 「移到第几步」
 node tools/verify-delete.js               # 删除已发布的教程（真发一份再删，不留痕）
 ```
 

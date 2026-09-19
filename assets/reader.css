@@ -107,7 +107,9 @@ html[data-mode="long"] .done b{display:block;font-size:19px;margin-bottom:4px}
 .topbar-progress{flex:0 0 auto;padding:0 12px 6px;background:var(--bg)}
 
 /* ── long 模式：同一份 DOM，改版式 ─────────────────────── */
-html[data-mode="long"] body{display:block;min-height:0}
+/* 长文模式下 body 必须能长高：sticky 的定位容器是 body，
+   body 被 height:100% 钉死在一屏时，滚过第一屏顶栏就不再吸顶了（踩过） */
+html[data-mode="long"] body{display:block;height:auto;min-height:100%}
 html[data-mode="long"] .top{position:sticky;top:0;z-index:20}
 html[data-mode="long"] .deck{
   display:block;overflow:visible;touch-action:auto;
@@ -129,30 +131,36 @@ html[data-mode="long"] .topbar-progress{display:none}
 
 /* 矮屏：把顶栏进度行、内外边距收紧，省下来的高度全给截图。
    断点卡在 700px 而不是某台具体设备（活参数原则） */
+/* 矮屏（手机带上浏览器工具栏之后基本都落在这里）：
+   只压尺寸、不换形态。每省下 10px 都是给截图的 —— 1:2.2 的竖图，
+   高度每多 22px，宽度才多 10px，所以这里抠得比较细 */
 @media (max-height:700px){
   .topbar-progress{display:none}
-  .top{padding-top:calc(4px + env(safe-area-inset-top));padding-bottom:4px}
+  .top{padding-top:calc(3px + env(safe-area-inset-top));padding-bottom:3px}
   .top h1{font-size:15px}
-  .page{padding-top:4px}
-  .say{padding:9px 12px;margin:6px 0 8px}
-  .say h2{font-size:16px}
-  .bottom{padding-top:4px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
+  .page{padding:3px 12px 0}
+  .say{padding:8px 11px;margin:5px 0 6px}
+  .say .h{margin-bottom:3px}
+  .say h2{font-size:15px;line-height:1.3}
+  .say p{font-size:15px;line-height:1.55}
+  .more{display:none}                    /* 提示文字省掉，正文本身带省略号，点一下照样展开 */
+  .bottom{padding-top:3px;padding-bottom:calc(3px + env(safe-area-inset-bottom));gap:8px}
+  .bottom button{height:44px}
   html[data-mode="step"] .say:not(.open) p{-webkit-line-clamp:2}
 }
 
-/* 矮屏（SE 这一类，568 高）：1:2.2 的竖屏截图和文字块在数学上就挤不下
-   ——把文字改成浮在截图底部的一层，整屏高度全给图。
-   这是「确实放不下」才换的形态，断点卡在 640 以下，主流机型（≥700）不受影响。 */
-@media (max-height:640px){
-  html[data-mode="step"] .page{position:relative}
-  html[data-mode="step"] .say{
-    position:absolute;left:14px;right:14px;bottom:10px;z-index:5;
-    background:color-mix(in srgb, var(--card) 88%, transparent);
-    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-    box-shadow:0 4px 20px rgba(0,0,0,.14);
-  }
-  html[data-mode="step"] .shot{padding-bottom:0}
+/* 更矮的：正文先给 1 行，点一下就能展开。
+   断点定在 660：iPhone 14/15 在 Safari 里带上下工具栏时可视高度就落在 640 上下，
+   正是最需要把高度让给截图的那一档 */
+@media (max-height:660px){
+  html[data-mode="step"] .say:not(.open) p{-webkit-line-clamp:1}
+  .say h2{font-size:14px}
 }
+
+/* 曾经在矮屏（≤640px 高）把文字改成浮在图上的一层，为的是给 320×568 腾高度。
+   撤掉了：iPhone Safari 带上下工具栏时高度也落进这个断点，文字就盖住了截图主体，
+   用户反馈「很割裂、挡到图了」。按移动端标准该做的是**压尺寸、不换形态**，
+   所以矮屏只收紧间距和行数（见上面 max-height:700px 那段），版式保持一致。 */
 
 
 /* ── 全部步骤面板 ─────────────────────────────────────
@@ -241,3 +249,20 @@ html[data-mode="long"] .topbar-progress{display:none}
   }
   .scell.now{background:rgba(91,87,216,.10);outline-offset:-2px}
 }
+
+
+/* ── 悬浮键：长文模式下滚远了用来回顶部 ─────────────────
+   顶栏本身是吸顶的（全部步骤/切换模式一直够得着），这个只补"快速回最上面" */
+.fab{
+  position:fixed;right:14px;z-index:40;
+  bottom:calc(16px + env(safe-area-inset-bottom));
+  width:48px;height:48px;border-radius:24px;
+  background:rgba(20,20,22,.82);color:#fff;font-size:20px;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.28);
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity .2s ease, transform .2s ease;
+}
+.fab.on{opacity:1;transform:none;pointer-events:auto}
+html[data-mode="step"] .fab{display:none}     /* 逐步模式一屏一步，用不上 */
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .fab{background:rgba(240,240,245,.9);color:#111} }

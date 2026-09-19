@@ -134,11 +134,29 @@
 
   function paint() {
     markCurrentStep();
+    syncFab();
     const n = steps.length || 1;
     $('#count').textContent = `${cur + 1} / ${n}`;
     $('#fill').style.width = ((cur + 1) / n * 100) + '%';
     $('#prev').disabled = cur === 0;
     $('#next').disabled = cur === n - 1;
+  }
+
+  /* ── 回到顶部的悬浮键（只在长文模式、滚远了才出现） ── */
+  let fab = null;
+  function buildFab() {
+    if (fab) return fab;
+    fab = el('button', 'fab tap');
+    fab.type = 'button';
+    fab.textContent = '↑';
+    fab.setAttribute('aria-label', '回到最上面');
+    fab.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
+    document.body.appendChild(fab);
+    return fab;
+  }
+  function syncFab() {
+    const f = buildFab();
+    f.classList.toggle('on', mode() === 'long' && scrollY > 400);
   }
 
   /* ── 全部步骤面板 ─────────────────────────────────

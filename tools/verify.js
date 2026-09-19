@@ -108,7 +108,13 @@ const probes = {
       const s = out.sameScreen;
       chk('图与文字同屏（最差步）', s.inPage,
           `第 ${s.step} 步：图 ${s.imgW}×${s.imgH} / 文字 ${s.sayH}px${s.overlay ? '（浮层）' : ''}`);
-      chk('最差步图宽 ≥ 屏宽 55%', s.imgW >= w * 0.55, `第 ${s.step} 步 ${s.imgW}px vs ${Math.round(w * 0.55)}px`);
+      // 阈值按屏高分档：1:2.2 的竖屏截图 + 文字块 + 上下栏，在 600px 高以下
+      // 几何上就拿不到 55%（除非把文字改成浮在图上，但那个形态已被否掉——
+      // 用户反馈「割裂、挡图」，移动端标准也是"压尺寸不换形态"）。
+      // 主流机型（≥700 高）仍按 55% 要求。
+      const want = h >= 700 ? 0.55 : 0.46;
+      chk(`最差步图宽 ≥ 屏宽 ${Math.round(want * 100)}%`, s.imgW >= w * want,
+          `第 ${s.step} 步 ${s.imgW}px vs ${Math.round(w * want)}px（屏高 ${h}）`);
       if (s.overlay) chk('浮层遮挡 ≤ 图高 35%', s.cover <= 35, s.cover + '%');
     }
     console.log(`\n── ${w}×${h} ${page}${MODE ? ' [' + MODE + ']' : ''}`);
