@@ -4,15 +4,22 @@
 (() => {
   'use strict';
 
-  const MAX_EDGE = 1600;   // 长边上限：再大对手机阅读没有意义，只是白占仓库
+  /* 为什么按「宽度」而不是「长边」限制：
+     手机竖屏截图是 1170×2532 这种细长比例。按长边 1600 限，宽度会被压到 739，
+     而 DPR3 的手机显示 390 逻辑像素宽 = 1170 物理像素 —— 素材只有 739，
+     等于放大 1.6 倍来看，必糊。屏幕的清晰度取决于「宽度够不够」，跟多高无关。
+     1440 = 430(最宽的主流机型) × 3(DPR) 再留一点余量。 */
+  const MAX_W = 1440;
+  const MAX_PIXELS = 6e6;   // 再给个总像素兜底，防止超长截图（比如整页长图）撑爆体积
   const QUALITY = 0.85;
 
-  /** 算出目标尺寸。max 是参数不是写死值（同一函数也给写作页的预览用）。 */
-  function pickSize(w, h, max = MAX_EDGE) {
+  /** 算出目标尺寸。两个上限都是参数，不是写死值。 */
+  function pickSize(w, h, maxW = MAX_W, maxPixels = MAX_PIXELS) {
     if (!(w > 0 && h > 0)) throw new Error('尺寸不合法');
-    const long = Math.max(w, h);
-    if (long <= max) return { w, h, scaled: false };
-    const k = max / long;
+    let k = 1;
+    if (w > maxW) k = maxW / w;
+    if (w * k * h * k > maxPixels) k = Math.sqrt(maxPixels / (w * h));
+    if (k >= 1) return { w, h, scaled: false };          // 绝不放大
     return { w: Math.round(w * k), h: Math.round(h * k), scaled: true };
   }
 
@@ -31,11 +38,11 @@
    * @returns {Promise<{blob:Blob,w:number,h:number,ext:string,scaled:boolean}>}
    */
   async function compress(file, opts = {}) {
-    const max = opts.max ?? MAX_EDGE;
+    const maxW = opts.maxW ?? opts.max ?? MAX_W;
     const quality = opts.quality ?? QUALITY;
     const bmp = await createImageBitmap(file);
     try {
-      const size = pickSize(bmp.width, bmp.height, max);
+      const size = pickSize(bmp.width, bmp.height, maxW);
       const cv = document.createElement('canvas');
       cv.width = size.w;
       cv.height = size.h;
@@ -63,5 +70,5 @@
     return btoa(s);
   }
 
-  window.SGImg = { pickSize, compress, toBase64, supportsWebp, MAX_EDGE, QUALITY };
+  window.SGImg = { pickSize, compress, toBase64, supportsWebp, MAX_W, MAX_PIXELS, QUALITY };
 })();

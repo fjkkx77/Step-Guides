@@ -171,7 +171,22 @@ const order = `JSON.stringify(window.SGWriter.draft.steps.map(s => s.text))`;
   await sleep(400);
   chk('抬起拖拽的那根手指才落位', (await c.ev(`!document.querySelector('.lpd-drag')`)) === true);
 
-  // ── ⑥ 短按不该触发拖拽 ──
+  // ── ⑥ 拖动只认抓手：长按卡片空白处不该起拖拽（两种方式已统一成一种） ──
+  await c.ev(`scrollTo(0, 0)`);
+  await sleep(300);
+  const blank = JSON.parse(await c.ev(`(() => {
+    const el = document.querySelectorAll('.step')[0];
+    const r = el.querySelector('.thumb').getBoundingClientRect();
+    return JSON.stringify({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) });
+  })()`));
+  await touch('touchStart', blank.x, blank.y);
+  await sleep(700);                                  // 比原来的 450ms 长按还久
+  const byLongPress = await c.ev(`!!document.querySelector('.lpd-drag')`);
+  await touch('touchEnd', 0, 0);
+  await sleep(200);
+  chk('长按缩略图不再起拖拽（拖动只认抓手）', byLongPress === false);
+
+  // ── ⑦ 短按不该触发拖拽 ──
   r = await rect(1);
   await touch('touchStart', r.x, r.y);
   await sleep(150);

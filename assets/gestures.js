@@ -3,7 +3,7 @@
    死区 10 / 边缘 28 / 阈值 35% / 阻尼 0.3 / click 守卫 450ms 自过期。
    两个手势的分工（来自配方的仲裁表）：
      · 横向出死区 → 归左滑，同时取消长按计时
-     · 原地按住 450ms → 归拖拽；有条目正滑开着时不起拖拽
+     · 按住抓手 ⠿ → 归拖拽；有条目正滑开着时不起拖拽（拖动只认抓手，不再支持长按空白处）
      · 纵向 → 谁也不接，页面照常滚 */
 (() => {
   'use strict';
@@ -123,7 +123,7 @@
 
   /* ═══════════ ② 长按拖动排序 ═══════════ */
   function LongPressDrag(o) {
-    const HOLD = 450;        // 和配方一致：450ms 才算长按，短了会和滚动/点击打架
+    const HOLD_HANDLE = 90;  // 按住抓手多久算"要拖"。抓手是专用热区，不用像长按那样等满 450ms
     const DEAD = 10;         // 按住后手指抖动超过这个距离就当是滚动，取消长按
     const EDGE = 64;         // 离屏幕上下这么近时自动滚动
     let timer = 0, st = null;
@@ -183,14 +183,16 @@
       if (e.touches.length !== 1 || (o.blocked && o.blocked())) return;
       const t = e.target;
       const onHandle = !!(o.handle && t.closest(o.handle));
-      // 输入框和按钮上不起拖拽（否则没法选字/点按钮）；但专门的抓手例外
-      if (!onHandle && t.closest('button, input, textarea, a, .lsw-acts')) return;
+      // 拖动只认抓手这一种方式。早先还支持"长按卡片空白处 450ms"，
+      // 结果一个功能两种触发方式，用户反馈说乱 —— 统一成抓手：看得见、不误触、
+      // 跟电脑端的拖拽把手是同一个东西
+      if (!onHandle) return;
       const el = t.closest(o.item);
       if (!el || !o.root().contains(el)) return;
       const t0 = e.touches[0];
       const y = t0.clientY, x = t0.clientX, id = t0.identifier;
-      // 抓手上按住＝明确表达了"我要拖"，不用等满 450ms；别处按住才需要长按确认
-      timer = setTimeout(() => { timer = 0; begin(el, y, id); }, onHandle ? 90 : HOLD);
+      // 按住抓手就是"我要拖"，给个很短的确认时间即可
+      timer = setTimeout(() => { timer = 0; begin(el, y, id); }, HOLD_HANDLE);
       st = st || null;
       document._lpdStart = { x, y };
     }, { passive: true });

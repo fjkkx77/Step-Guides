@@ -5,7 +5,9 @@
 /* ── 放大层 ─────────────────────────────────────────── */
 dialog#zoom{
   border:0;padding:0;margin:0;width:100vw;height:100dvh;max-width:100vw;max-height:100dvh;
-  background:rgba(12,12,14,.96);overflow:hidden;
+  /* --zfade 由 JS 在"下滑关闭"时调低：越往下拉背景越透，跟 iOS 相册一个观感 */
+  background:rgba(12,12,14,calc(.96 * var(--zfade, 1)));
+  overflow:hidden;
 }
 dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
 #zoom .box{
@@ -21,16 +23,24 @@ dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
   max-width:100%;max-height:100%;
   background:#fff;border-radius:8px;
   transform-origin:center center;
-  will-change:transform;
   user-select:none;-webkit-user-drag:none;
+  /* 这里**不要**写 will-change:transform —— GPU 会按当前倍率栅格化一次再拉伸，
+     放大后必糊。改由 JS 只在手势进行中临时开启（见 zoom.js 的 gpu()） */
 }
+/* 双击/还原/回弹这类"一步到位"的变化才走过渡，手势跟随时不加（会拖慢跟手） */
+#zoom img.zanim{transition:transform .24s cubic-bezier(.22,.8,.3,1)}
+@media (prefers-reduced-motion: reduce){ #zoom img.zanim{transition:none} }
 /* 工具栏：白底深字，压在深色蒙版上，怎么都看得清（旧版是半透明白圈，看不清） */
 #zoom .zbar{
   position:fixed;left:0;right:0;
   top:calc(8px + env(safe-area-inset-top));
   display:flex;align-items:center;justify-content:flex-end;gap:8px;
   padding:0 12px;
+  transition:opacity .22s ease;
 }
+/* 工具栏会自动淡出，免得挡住图上的内容（手机屏幕小，尤其明显）。
+   手机：点一下画面唤回/收起；电脑：动一下鼠标就回来 */
+#zoom.chrome-off .zbar{opacity:0;pointer-events:none}
 /* 工具栏上的东西一律用「实色底」，不能用半透明白 ——
    图片放大后占满整屏，背后经常是浅色截图，半透明白字直接看不见（踩过两次） */
 #zoom .zpct{
@@ -47,10 +57,4 @@ dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
 }
 #zoom .zreset{background:rgba(20,20,22,.82);color:#fff;border:1px solid rgba(255,255,255,.35)}
 #zoom .zclose{background:#fff;color:#111}
-#zoom .ztip{
-  position:fixed;left:50%;transform:translateX(-50%);
-  bottom:calc(12px + env(safe-area-inset-bottom));
-  max-width:92vw;padding:6px 14px;border-radius:16px;
-  background:rgba(20,20,22,.7);color:#fff;font-size:13px;
-  text-align:center;pointer-events:none;
-}
+/* 底部的操作提示去掉了：占地方、还挡内容，用户反馈说已经会用了 */

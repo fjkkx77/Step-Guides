@@ -153,3 +153,69 @@ html[data-mode="long"] .topbar-progress{display:none}
   }
   html[data-mode="step"] .shot{padding-bottom:0}
 }
+
+
+/* ── 全部步骤面板 ─────────────────────────────────────
+   步骤多的时候一步步点太慢。手机上从底部抽出来，电脑上贴左边，
+   选完就关 —— 不常驻，免得挤掉「一步一屏」好不容易腾出来的高度 */
+.stepsbtn{
+  flex:0 0 auto;height:var(--tap);min-width:var(--tap);padding:0 10px;border-radius:12px;
+  display:flex;align-items:center;gap:4px;color:var(--brand);font-size:14px;
+}
+.stepsbtn .sb-ico{font-size:15px}
+.stepsbtn .sb-n::after{content:' 步'}
+
+.steps-mask{
+  position:fixed;inset:0;z-index:60;
+  background:rgba(10,10,14,0);transition:background .2s ease;
+  display:flex;align-items:flex-end;
+}
+.steps-mask.on{background:rgba(10,10,14,.42)}
+.steps{
+  width:100%;max-height:64vh;display:flex;flex-direction:column;
+  background:var(--card);color:var(--ink);
+  border-radius:20px 20px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.22);
+  transform:translateY(100%);transition:transform .24s cubic-bezier(.22,.8,.3,1);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.steps-mask.on .steps{transform:none}
+.steps-head{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px 8px;border-bottom:1px solid var(--line);font-size:16px;
+}
+.steps-close{width:var(--tap);height:var(--tap);border-radius:12px;font-size:18px;color:var(--ink2)}
+.steps-grid{
+  flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));
+  gap:10px;padding:12px 14px 16px;
+}
+.scell{
+  position:relative;display:block;padding:0;border-radius:12px;overflow:hidden;
+  background:var(--shot-bg);border:1px solid var(--line);
+  aspect-ratio:3/4;
+}
+.scell img{width:100%;height:100%;object-fit:cover;object-position:top center}
+.scell .sno{
+  position:absolute;left:5px;top:5px;min-width:22px;height:22px;padding:0 6px;border-radius:11px;
+  background:rgba(20,20,22,.78);color:#fff;font-size:12px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;
+}
+.scell .scap{
+  position:absolute;left:0;right:0;bottom:0;padding:14px 6px 5px;
+  background:linear-gradient(to top,rgba(0,0,0,.72),transparent);
+  color:#fff;font-size:11px;line-height:1.35;text-align:left;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+}
+.scell.now{outline:3px solid var(--brand);outline-offset:-3px}
+
+/* 电脑上贴左边，像个目录栏 */
+@media (min-width:900px){
+  .steps-mask{align-items:stretch;justify-content:flex-start}
+  .steps{
+    width:300px;max-width:82vw;max-height:none;height:100%;
+    border-radius:0 20px 20px 0;box-shadow:8px 0 30px rgba(0,0,0,.22);
+    transform:translateX(-100%);
+  }
+  .steps-mask.on .steps{transform:none}
+  .steps-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+}

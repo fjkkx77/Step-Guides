@@ -24,8 +24,13 @@
     display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
   }
   .card .ops .go{background:var(--brand);color:#fff;border-color:transparent}
+  .card .ops .danger{color:#b0271e}
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .card .ops .danger{color:#ff8a80} }
   .pagetitle{flex:1;min-width:0;margin:0;font-size:17px;font-weight:600}
   .wtop .iconbtn#btn-home{font-size:26px;line-height:1}
+  .prog{padding:20px 18px;text-align:center}
+  .prog .big{font-size:17px;font-weight:600;margin-bottom:8px}
+  .prog .msg{font-size:14px;color:var(--muted);line-height:1.7;word-break:break-all}
 </style>
 </head>
 <body>
@@ -38,39 +43,145 @@
 
 <main class="list" id="list"><div class="empty">正在读取…</div></main>
 
+<!-- 删除确认：破坏性操作必须二次确认，且不用原生 confirm -->
+<dialog id="dlg-del">
+  <div class="sheet">
+    <h2 id="del-title">删除这份教程？</h2>
+    <p>教程的文字和图片会从仓库里一起删掉，<b>已经发出去的链接会立刻失效</b>，这个动作没法撤销。</p>
+    <div class="row">
+      <button class="tap" id="del-no" type="button">取消</button>
+      <button class="tap danger-solid" id="del-yes" type="button">删除</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-prog">
+  <div class="prog">
+    <div class="big" id="p-title">正在删除…</div>
+    <div class="msg" id="p-msg"></div>
+    <div class="row" id="p-row" hidden></div>
+  </div>
+</dialog>
+
+<script src="../assets/github.js"></script>
 <script>
 (async () => {
-  const list = document.getElementById('list');
-  document.getElementById('btn-new').onclick = () => location.href = '../w/';
-  document.getElementById('btn-home').onclick = () => location.href = '../';
-  try {
-    const r = await fetch('../list.json?cb=' + Date.now(), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const items = await r.json();
-    if (!items.length) { list.innerHTML = '<div class="empty">还没有发布过教程。<br>点右上角的 ＋ 开始写第一份。</div>'; return; }
+  const $ = s => document.querySelector(s);
+  const list = $('#list');
+  $('#btn-new').onclick = () => location.href = '../w/';
+  $('#btn-home').onclick = () => location.href = '../';
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const cfg = (() => { try { return JSON.parse(localStorage.getItem('sg.cfg') || '{}'); } catch (e) { return {}; } })();
+
+  let items = [];
+
+  async function load() {
+    try {
+      const r = await fetch('../list.json?cb=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      items = await r.json();
+    } catch (e) {
+      list.innerHTML = '<div class="empty">还没有 list.json（发布第一份教程后就会自动生成）</div>';
+      return;
+    }
+    render();
+  }
+
+  function render() {
+    if (!items.length) {
+      list.innerHTML = '<div class="empty">还没有发布过教程。<br>点右上角的 ＋ 开始写第一份。</div>';
+      return;
+    }
     list.innerHTML = items.map(it => {
       const url = '../t/' + it.id + '/';
       const when = (it.updated || '').slice(0, 10);
-      return `<article class="card">
-        <h2>${it.title.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</h2>
-        <div class="meta">${it.steps} 步 · ${when} · /t/${it.id}/</div>
+      return `<article class="card" data-id="${esc(it.id)}">
+        <h2>${esc(it.title)}</h2>
+        <div class="meta">${it.steps} 步 · ${when} · /t/${esc(it.id)}/</div>
         <div class="ops">
           <a class="go tap" href="${url}">打开</a>
           <button class="tap" data-copy="${url}" type="button">复制链接</button>
-          <a class="tap" href="../w/?edit=${it.id}">编辑</a>
+          <a class="tap" href="../w/?edit=${esc(it.id)}">编辑</a>
+          <button class="tap danger" data-del="${esc(it.id)}" type="button">🗑 删除</button>
         </div>
       </article>`;
     }).join('');
-    list.addEventListener('click', async e => {
-      const b = e.target.closest('button[data-copy]');
-      if (!b) return;
-      const abs = new URL(b.dataset.copy, location.href).href;
-      try { await navigator.clipboard.writeText(abs); b.textContent = '已复制 ✓'; }
-      catch (err) { prompt('手动复制：', abs); }
-    });
-  } catch (e) {
-    list.innerHTML = '<div class="empty">还没有 list.json（发布第一份教程后就会自动生成）</div>';
   }
+
+  list.addEventListener('click', async e => {
+    const copy = e.target.closest('button[data-copy]');
+    if (copy) {
+      const abs = new URL(copy.dataset.copy, location.href).href;
+      try { await navigator.clipboard.writeText(abs); copy.textContent = '已复制 ✓'; }
+      catch (err) { prompt('手动复制：', abs); }
+      return;
+    }
+    const del = e.target.closest('button[data-del]');
+    if (del) askDelete(del.dataset.del);
+  });
+
+  /* ── 删除 ────────────────────────────────────────── */
+  function askDelete(id) {
+    const it = items.find(x => x.id === id);
+    if (!it) return;
+    $('#del-title').textContent = `删除「${it.title}」？`;
+    $('#del-no').onclick = () => $('#dlg-del').close();
+    $('#del-yes').onclick = () => { $('#dlg-del').close(); doDelete(it); };
+    $('#dlg-del').showModal();
+  }
+
+  async function doDelete(it) {
+    if (!cfg.owner || !cfg.repo || !cfg.token) {
+      alert('还没填发布设置。先去写作页右上角的 ⚙ 里填好 GitHub 用户名、仓库和 token。');
+      location.href = '../w/';
+      return;
+    }
+    const dlg = $('#dlg-prog');
+    const row = $('#p-row');
+    row.hidden = true; row.innerHTML = '';
+    $('#p-title').textContent = '正在删除…';
+    $('#p-msg').textContent = '在数这份教程有哪些文件';
+    dlg.showModal();
+
+    try {
+      // 直接问仓库这个目录下到底有哪些文件，别靠读 data.json 推断图片：
+      // data.json 万一读不到，图片就会被漏在仓库里变成孤儿（测试时撞到过）
+      const paths = await window.SGGitHub.listTree({
+        token: cfg.token, owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main',
+        prefix: `t/${it.id}/`
+      });
+      const files = paths.map(path => ({ path, sha: null }));
+
+      const next = items.filter(x => x.id !== it.id);
+      const b64 = str => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+      files.push({ path: 'list.json', content: b64(JSON.stringify(next, null, 1)) });
+
+      $('#p-msg').textContent = `这份教程有 ${files.length} 个文件，正在删…`;
+      await window.SGGitHub.publish({
+        token: cfg.token, owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main',
+        files, message: `删除教程：${it.title}`,
+        onProgress: p => { $('#p-msg').textContent = p.phase; }
+      });
+
+      $('#p-title').textContent = '已从仓库删除';
+      $('#p-msg').textContent = '线上页面要等一会儿才会真的打不开（构建需要几十秒）。';
+      items = next;
+      render();
+      row.hidden = false;
+      row.innerHTML = '<button class="tap go" id="p-ok" type="button">知道了</button>';
+      $('#p-ok').onclick = () => dlg.close();
+    } catch (err) {
+      $('#p-title').textContent = '删除失败';
+      $('#p-msg').textContent = err.message + '\n（仓库没有被改动，教程还在）';
+      row.hidden = false;
+      row.innerHTML = '<button class="tap" id="p-ok2" type="button">关掉</button>';
+      $('#p-ok2').onclick = () => dlg.close();
+    }
+  }
+
+  window.SGMine = { get items() { return items; }, askDelete, doDelete, load };
+  await load();
 })();
 </script>
 </body>

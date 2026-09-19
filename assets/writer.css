@@ -78,13 +78,15 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .step .ops button.danger{color:#ff8a80} }
 /* 把手两端都显示：电脑上是 HTML5 拖拽，手机上是「按住它拖」的抓手。
    手机上没有可见抓手时，用户根本不知道能拖（用户反馈过） */
+/* 拖动只认这个抓手（手机、电脑统一）。它是唯一的拖动入口，所以要显眼一点 */
 .handle{
   display:flex;align-items:center;justify-content:center;
   height:44px;width:44px;flex:0 0 44px;border-radius:10px;
-  background:var(--bg);border:1px solid var(--line);color:var(--muted);
+  background:var(--bg);border:1px solid var(--line);color:var(--ink2);
   cursor:grab;touch-action:none;          /* 在把手上按住就别让页面滚 */
   font-size:18px;line-height:1;
 }
+.handle:active{background:rgba(91,87,216,.14);border-color:var(--brand);color:var(--brand)}
 @media (pointer:fine){ .handle{cursor:grab} }
 
 /* ── 添加区 ─────────────────────────────────────────── */

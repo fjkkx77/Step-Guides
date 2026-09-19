@@ -159,6 +159,21 @@
     return false;
   }
 
+  /** 列出仓库里某个目录下的所有文件路径。
+      删除教程时必须用它，而不是靠读 data.json 推断有哪些图片 ——
+      data.json 万一读不到（网络、缓存、跨环境），图片就会被漏在仓库里变成孤儿。
+      仓库的 tree 才是权威来源。 */
+  async function listTree(o) {
+    const base = `/repos/${o.owner}/${o.repo}`;
+    const ref = await api(`${base}/git/ref/heads/${o.branch || 'main'}`, { token: o.token });
+    const commit = await api(`${base}/git/commits/${ref.object.sha}`, { token: o.token });
+    const tree = await api(`${base}/git/trees/${commit.tree.sha}?recursive=1`, { token: o.token });
+    const pre = String(o.prefix || '').replace(/^\/+/, '');
+    return (tree.tree || [])
+      .filter(x => x.type === 'blob' && (!pre || x.path === pre || x.path.startsWith(pre)))
+      .map(x => x.path);
+  }
+
   /** 读一个文件的当前内容（编辑已发布的教程时用） */
   async function getJson(url) {
     const r = await fetch(url + '?cb=' + Date.now(), { cache: 'no-store' });
@@ -166,5 +181,5 @@
     return r.json();
   }
 
-  window.SGGitHub = { randomId, buildTree, publish, waitLive, getJson, api };
+  window.SGGitHub = { randomId, buildTree, publish, waitLive, getJson, listTree, api };
 })();

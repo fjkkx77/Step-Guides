@@ -87,6 +87,7 @@
     }));
 
     $('#count').textContent = `1 / ${steps.length}`;
+    buildStepsPanel().btn.querySelector('.sb-n').textContent = steps.length;
     // 渲染完才知道哪几步真的被裁掉了（scrollHeight > clientHeight）
     requestAnimationFrame(() => {
       document.querySelectorAll('.page').forEach(p => {
@@ -132,11 +133,88 @@
   }
 
   function paint() {
+    markCurrentStep();
     const n = steps.length || 1;
     $('#count').textContent = `${cur + 1} / ${n}`;
     $('#fill').style.width = ((cur + 1) / n * 100) + '%';
     $('#prev').disabled = cur === 0;
     $('#next').disabled = cur === n - 1;
+  }
+
+  /* ── 全部步骤面板 ─────────────────────────────────
+     步骤一多，一步步点「下一步」太慢。给一个缩略图面板直接跳。
+     按钮和面板都是运行时生成的：老教程的壳子里没有它们，但阅读器只有一份，
+     改这里所有历史教程一起生效（不用重新发布）。 */
+  let panel = null;
+
+  function buildStepsPanel() {
+    if (panel) return panel;
+
+    const btn = el('button', 'stepsbtn tap');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', '全部步骤');
+    btn.innerHTML = '<span class="sb-ico">▦</span><span class="sb-n"></span>';
+    btn.addEventListener('click', () => openSteps());
+    const top = $('.top');
+    if (top) top.insertBefore(btn, $('#modebtn'));
+
+    const mask = el('div', 'steps-mask');
+    mask.hidden = true;
+    const aside = el('aside', 'steps');
+    aside.innerHTML =
+      '<div class="steps-head"><b>全部步骤</b>' +
+      '<button class="steps-close tap" type="button" aria-label="关闭">✕</button></div>' +
+      '<div class="steps-grid"></div>';
+    mask.appendChild(aside);
+    document.body.appendChild(mask);
+
+    mask.addEventListener('click', e => { if (e.target === mask) closeSteps(); });
+    aside.querySelector('.steps-close').addEventListener('click', closeSteps);
+
+    panel = { btn, mask, aside, grid: aside.querySelector('.steps-grid') };
+    return panel;
+  }
+
+  function fillSteps() {
+    const p = buildStepsPanel();
+    p.btn.querySelector('.sb-n').textContent = steps.length;
+    p.grid.replaceChildren(...steps.map((s, i) => {
+      const cell = el('button', 'scell tap');
+      cell.type = 'button';
+      cell.dataset.i = i;
+      const im = new Image();
+      im.src = s.src || ('i/' + s.img);
+      im.loading = 'lazy';
+      im.alt = '';
+      const no = el('span', 'sno', String(i + 1));
+      const cap = el('span', 'scap', s.title || s.text || '');
+      cell.append(im, no, cap);
+      cell.addEventListener('click', () => { closeSteps(); goto(i); });
+      return cell;
+    }));
+  }
+
+  function openSteps() {
+    const p = buildStepsPanel();
+    fillSteps();
+    p.mask.hidden = false;
+    requestAnimationFrame(() => p.mask.classList.add('on'));
+    markCurrentStep();
+  }
+
+  function closeSteps() {
+    if (!panel) return;
+    panel.mask.classList.remove('on');
+    setTimeout(() => { if (panel && !panel.mask.classList.contains('on')) panel.mask.hidden = true; }, 220);
+  }
+
+  function markCurrentStep() {
+    if (!panel || panel.mask.hidden) return;
+    panel.grid.querySelectorAll('.scell').forEach(c => {
+      const on = +c.dataset.i === cur;
+      c.classList.toggle('now', on);
+      if (on) c.scrollIntoView({ block: 'nearest' });
+    });
   }
 
   /* ── 放大层 ───────────────────────────────────────── */
@@ -170,11 +248,6 @@
         '<button class="zreset" type="button">还原</button>' +
         '<button class="zclose" type="button">✕ 关闭</button>';
       dlg.appendChild(bar);
-      const tip = el('div', 'ztip');
-      tip.textContent = matchMedia('(pointer: fine)').matches
-        ? '滚轮缩放 · 双击放大 · 按住拖动 · Esc 关闭'
-        : '双指捏合放大 · 双击放大 · 拖动查看';
-      dlg.appendChild(tip);
       bar.querySelector('.zclose').addEventListener('click', () => dlg.close());
       bar.querySelector('.zreset').addEventListener('click', () => zoomer && zoomer.reset());
     }
@@ -223,7 +296,8 @@
     addEventListener('scroll', onScroll, { passive: true });
 
     addEventListener('keydown', e => {
-      if ($('#zoom').open) return;
+      if (e.key === 'Escape' && panel && !panel.mask.hidden) { closeSteps(); return; }
+      if ($('#zoom') && $('#zoom').open) return;
       if ((e.key === 'Enter' || e.key === ' ') && document.activeElement?.classList.contains('say')) {
         document.activeElement.click(); e.preventDefault(); return;
       }

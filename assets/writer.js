@@ -300,11 +300,6 @@
         '<button class="zreset" type="button">还原</button>' +
         '<button class="zclose" type="button">✕ 关闭</button>';
       dlg.appendChild(bar);
-      const tip = document.createElement('div');
-      tip.className = 'ztip';
-      tip.textContent = matchMedia('(pointer: fine)').matches
-        ? '滚轮缩放 · 双击放大 · 按住拖动 · Esc 关闭' : '双指捏合放大 · 双击放大 · 拖动查看';
-      dlg.appendChild(tip);
       bar.querySelector('.zclose').onclick = () => dlg.close();
       bar.querySelector('.zreset').onclick = () => zoomer && zoomer.reset();
     }

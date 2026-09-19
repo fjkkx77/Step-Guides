@@ -43,24 +43,32 @@
   await t('pickSize：小图不放大（412×915 原样）', () =>
     eq(pickSize(412, 915), { w: 412, h: 915, scaled: false }) || JSON.stringify(pickSize(412, 915)));
 
-  await t('pickSize：竖图按长边缩到 1600', () => {
+  await t('pickSize：手机竖屏截图 1170×2532 原样保留（宽度够，别按长边压糊了）', () => {
     const r = pickSize(1170, 2532);
-    return (r.h === 1600 && r.w === 739 && r.scaled === true) || JSON.stringify(r);
+    return (r.w === 1170 && r.h === 2532 && r.scaled === false) || JSON.stringify(r);
   });
 
-  await t('pickSize：横图也按长边缩', () => {
+  await t('pickSize：过宽的图按宽度缩到 1440', () => {
     const r = pickSize(3000, 1000);
-    return (r.w === 1600 && r.h === 533) || JSON.stringify(r);
+    return (r.w === 1440 && r.h === 480) || JSON.stringify(r);
   });
 
-  await t('pickSize：正好等于上限不缩', () =>
-    pickSize(1600, 800).scaled === false || '边界被多缩了一次');
+  await t('pickSize：正好等于宽度上限不缩', () =>
+    pickSize(1440, 800).scaled === false || '边界被多缩了一次');
+
+  await t('pickSize：超长整页图受总像素兜底', () => {
+    const r = pickSize(1200, 12000);        // 1440 万像素，超过 600 万
+    // 四舍五入会让像素数略微超一点点，给 1% 容差（别把取整误差当成 bug）
+    const ratio = r.w / r.h, want = 1200 / 12000;
+    return (r.scaled === true && r.w * r.h <= 6e6 * 1.01 && Math.abs(ratio - want) < 0.002)
+      || JSON.stringify(r) + ` 像素 ${(r.w * r.h / 1e6).toFixed(2)}M`;
+  });
 
   await t('pickSize：尺寸非法要报错', () => {
     try { pickSize(0, 100); return '没有报错'; } catch (e) { return true; }
   });
 
-  await t('pickSize：max 是参数不是写死的', () => {
+  await t('pickSize：上限是参数不是写死的', () => {
     const r = pickSize(1000, 500, 400);
     return (r.w === 400 && r.h === 200) || JSON.stringify(r);
   });

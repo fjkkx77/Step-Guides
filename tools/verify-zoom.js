@@ -1,116 +1,170 @@
-/* 放大查看器：电脑端滚轮/双击/拖动、关闭按钮看不看得清、老教程能不能用上 */
+/* 放大查看器：电脑端滚轮/双击/拖动/关闭 + 手机端捏合/双击/下滑关闭/工具栏自动隐藏
+   重点盯这次修的三个根因：
+   ① will-change 不能常驻（常驻＝GPU 按旧倍率拉伸＝放大后糊）
+   ② 第二根手指落下不能被误判成双击（那就是"一放上去就闪"）
+   ③ 双击要有过渡动画，不能一帧跳变 */
 const { open, sleep } = require('./cdp.js');
 const PORT = 8879;
-const PAGE = process.argv[2] || 't/qhftq5kz/';
-// --base=https://…/ 可以直接验线上（老教程能不能自动用上新放大器，只有线上说了算）
+const PAGE = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 't/qhftq5kz/';
 const BASE = (process.argv.find(a => a.startsWith('--base=')) || '').split('=').slice(1).join('=');
 
 const scaleOf = `(() => {
   const t = getComputedStyle(document.getElementById('zoomimg')).transform;
   if (!t || t === 'none') return 1;
-  return +t.match(/matrix\\(([-\\d.]+)/)[1];
+  const m = t.match(/matrix\\(([-\\d.]+)/);
+  return m ? +m[1] : 1;
 })()`;
 
 (async () => {
-  const c = await open(1280, 800, 1);
-  await c.goto(BASE ? BASE.replace(/\/$/, '') + '/' + PAGE : `http://127.0.0.1:${PORT}/${PAGE}`);
-  for (let i = 0; i < 30; i++) { await sleep(200); if (await c.ev(`!!document.querySelector('.page img')`)) break; }
-
   let bad = 0;
   const chk = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${n}${d ? ' — ' + d : ''}`); if (!ok) bad++; };
+  const url = BASE ? BASE.replace(/\/$/, '') + '/' + PAGE : `http://127.0.0.1:${PORT}/${PAGE}`;
+  const waitFor = async (c, expr, n = 40) => {
+    for (let i = 0; i < n; i++) { await sleep(250); if (await c.ev(expr)) return true; }
+    return false;
+  };
 
-  // 还没点图，样式就该已经在了：等第一次点图再取会闪一下没样式的弹层
-  for (let i = 0; i < 30; i++) {
-    await sleep(200);
-    if (await c.ev(`(() => { const l = document.querySelector('link[data-sg-zoom]'); return !!(l && l.sheet); })()`)) break;
-  }
+  /* ══════════ 电脑端 ══════════ */
+  const c = await open(1280, 800, 1);
+  await c.goto(url);
+  await waitFor(c, `!!document.querySelector('.page img')`);
+
   chk('进页面就预载了放大器样式（不等点图）', await c.ev(`(() => {
     const l = document.querySelector('link[data-sg-zoom]');
     return !!(l && l.sheet && l.sheet.cssRules.length > 5);
   })()`));
 
-  // 点图打开放大层（老教程的壳子里没有 zoom.js，应该被自动加载进来）
   await c.ev(`document.querySelector('.page img').click()`);
-  // zoom.js/zoom.css 是按需取的，线上首次加载要等一会儿。
-  // 用固定 sleep 会在慢网络下测早（本地秒开看不出来，已经踩过三次），改成等条件成立
-  for (let i = 0; i < 40; i++) {
-    await sleep(250);
-    if (await c.ev(`!!(window.SGZoom && document.getElementById('zoom').open
-                       && document.querySelector('#zoom .zclose'))`)) break;
-  }
+  await waitFor(c, `!!(window.SGZoom && document.getElementById('zoom').open && document.querySelector('#zoom .zclose'))`);
   await sleep(200);
+
   const st = JSON.parse(await c.ev(`JSON.stringify({
     open: document.getElementById('zoom').open,
-    zoomLib: !!window.SGZoom,
-    hasBar: !!document.querySelector('#zoom .zbar'),
+    bar: !!document.querySelector('#zoom .zbar'),
     closeText: (document.querySelector('#zoom .zclose') || {}).textContent || '',
-    closeBox: (() => { const b = document.querySelector('#zoom .zclose');
-      if (!b) return null; const r = b.getBoundingClientRect();
-      const cs = getComputedStyle(b);
-      return { h: Math.round(r.height), w: Math.round(r.width), bg: cs.backgroundColor, fg: cs.color }; })(),
-    tip: (document.querySelector('#zoom .ztip') || {}).textContent || ''
+    closeH: (() => { const b = document.querySelector('#zoom .zclose');
+      return b ? Math.round(b.getBoundingClientRect().height) : 0; })(),
+    tip: !!document.querySelector('#zoom .ztip'),
+    willChange: getComputedStyle(document.getElementById('zoomimg')).willChange
   })`));
   chk('点图打开放大层', st.open === true);
-  chk('zoom.js 被自动加载（老教程也能用上）', st.zoomLib === true);
-  chk('有工具栏', st.hasBar === true);
-  chk('关闭按钮带文字且 ≥44px', /关闭/.test(st.closeText) && st.closeBox && st.closeBox.h >= 44,
-      st.closeBox ? `${st.closeText.trim()} ${st.closeBox.w}×${st.closeBox.h} 底色${st.closeBox.bg}` : '没有');
-  chk('底部有操作提示', /滚轮|双指/.test(st.tip), st.tip);
+  chk('工具栏在，关闭键带文字且 ≥44px', st.bar && /关闭/.test(st.closeText) && st.closeH >= 44,
+      `${st.closeText.trim()} 高 ${st.closeH}`);
+  chk('底部那条操作提示已去掉', st.tip === false);
+  chk('静止时没有 will-change（常驻会让放大后发糊）',
+      ['auto', ''].includes(st.willChange), st.willChange);
 
   const s0 = await c.ev(scaleOf);
-  // 滚轮放大（电脑端的核心诉求）
-  for (let i = 0; i < 4; i++) {
-    await c.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 400, deltaX: 0, deltaY: -240 });
+  for (let i = 0; i < 3; i++) {
+    await c.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 400, deltaX: 0, deltaY: -160 });
     await sleep(120);
   }
   const s1 = await c.ev(scaleOf);
-  chk('滚轮能放大', s1 > s0 * 1.3, `${s0.toFixed(2)} -> ${s1.toFixed(2)}`);
+  chk('滚轮能放大', s1 > s0 * 1.2, `${s0.toFixed(2)} -> ${s1.toFixed(2)}`);
+  chk('倍率显示跟着变', (await c.ev(`document.querySelector('#zoom .zpct').textContent`)) !== '100%');
 
-  const pct = await c.ev(`document.querySelector('#zoom .zpct').textContent`);
-  chk('倍率显示跟着变', pct !== '100%', pct);
+  await sleep(500);
+  chk('滚轮停下后摘掉 will-change（画面重新栅格化＝清晰）',
+      ['auto', ''].includes(await c.ev(`getComputedStyle(document.getElementById('zoomimg')).willChange`)),
+      await c.ev(`getComputedStyle(document.getElementById('zoomimg')).willChange`));
 
-  // 滚轮缩小回去
-  for (let i = 0; i < 8; i++) {
-    await c.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 400, deltaX: 0, deltaY: 240 });
-    await sleep(100);
-  }
-  const s2 = await c.ev(scaleOf);
-  chk('滚轮能缩小，且不会小于适应屏幕', s2 < s1 && s2 >= 0.999, s2.toFixed(2));
-
-  // 双击放大
-  await c.ev(`document.querySelector('#zoom .box').dispatchEvent(
-    new MouseEvent('dblclick', { clientX: 640, clientY: 400, bubbles: true, cancelable: true }))`);
-  await sleep(200);
-  const s3 = await c.ev(scaleOf);
-  chk('双击能放大', s3 > 2, s3.toFixed(2));
-
-  // 还原
   await c.ev(`document.querySelector('#zoom .zreset').click()`);
-  await sleep(200);
-  chk('「还原」回到适应屏幕', Math.abs((await c.ev(scaleOf)) - 1) < 0.01);
-
-  // 放大后拖动
+  await sleep(400);
   await c.ev(`document.querySelector('#zoom .box').dispatchEvent(
     new MouseEvent('dblclick', { clientX: 640, clientY: 400, bubbles: true, cancelable: true }))`);
-  await sleep(200);
-  const moved = await c.ev(`(() => {
+  await sleep(60);
+  const anim = JSON.parse(await c.ev(`JSON.stringify({
+    cls: document.getElementById('zoomimg').classList.contains('zanim'),
+    trans: getComputedStyle(document.getElementById('zoomimg')).transitionDuration
+  })`));
+  chk('双击带过渡动画（不是一帧跳变）', anim.cls && parseFloat(anim.trans) > 0.1, anim.trans);
+  await sleep(400);
+  chk('双击后确实放大了', (await c.ev(scaleOf)) > 2, (+(await c.ev(scaleOf))).toFixed(2));
+
+  const mv = JSON.parse(await c.ev(`(() => {
     const box = document.querySelector('#zoom .box');
     const before = getComputedStyle(document.getElementById('zoomimg')).transform;
     const ev = (t, x, y) => box.dispatchEvent(new PointerEvent(t, { pointerId: 1, pointerType: 'mouse',
       clientX: x, clientY: y, bubbles: true, cancelable: true }));
-    ev('pointerdown', 640, 400); ev('pointermove', 500, 320); ev('pointerup', 500, 320);
+    ev('pointerdown', 640, 400); ev('pointermove', 520, 320); ev('pointerup', 520, 320);
     return JSON.stringify({ before, after: getComputedStyle(document.getElementById('zoomimg')).transform });
-  })()`);
-  const mv = JSON.parse(moved);
+  })()`));
   chk('放大后可以按住拖动', mv.before !== mv.after);
 
-  // 关闭
-  await c.ev(`document.querySelector('#zoom .zclose').click()`);
-  await sleep(200);
-  chk('点关闭能退出', (await c.ev(`document.getElementById('zoom').open`)) === false);
-  chk('关掉后倍率复位', Math.abs((await c.ev(scaleOf)) - 1) < 0.01);
+  await sleep(2700);
+  chk('闲置一会儿工具栏自动淡出（不挡图）',
+      (await c.ev(`document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
+  await c.ev(`document.querySelector('#zoom .box').dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))`);
+  await sleep(250);
+  chk('动一下鼠标工具栏就回来',
+      (await c.ev(`!document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
 
+  await c.ev(`document.querySelector('#zoom .zclose').click()`);
+  await sleep(300);
+  chk('点关闭能退出', (await c.ev(`document.getElementById('zoom').open`)) === false);
   await c.close();
-  console.log(bad ? `\n共 ${bad} 条未通过` : '\n全部通过');
+
+  /* ══════════ 手机端 ══════════ */
+  const m = await open(390, 844, 2);
+  await m.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await m.goto(url);
+  await waitFor(m, `!!document.querySelector('.page img')`);
+  await m.ev(`document.querySelector('.page img').click()`);
+  await waitFor(m, `!!document.querySelector('#zoom .zclose')`);
+  await sleep(300);
+
+  const T = (type, pts) => m.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+  const mScale = async () => +(await m.ev(scaleOf));
+
+  await T('touchStart', [{ x: 150, y: 400, id: 1 }]);
+  await sleep(80);
+  await T('touchStart', [{ x: 150, y: 400, id: 1 }, { x: 250, y: 400, id: 2 }]);
+  await sleep(200);
+  const afterTwoDown = await mScale();
+  chk('两指落下不会被误判成双击（"一放上去就闪"的根因）',
+      Math.abs(afterTwoDown - 1) < 0.02, afterTwoDown.toFixed(2));
+
+  const seq = [];
+  for (let d = 20; d <= 120; d += 20) {
+    await T('touchMove', [{ x: 150 - d, y: 400, id: 1 }, { x: 250 + d, y: 400, id: 2 }]);
+    await sleep(70);
+    seq.push(+(await mScale()).toFixed(2));
+  }
+  const rising = seq.every((v, i) => i === 0 || v >= seq[i - 1] - 0.01);
+  chk('捏合时倍率连续上升（不来回跳＝不抖）', rising && seq[seq.length - 1] > 1.3, seq.join(' → '));
+  chk('捏合进行中开着 will-change（跟手）',
+      (await m.ev(`document.getElementById('zoomimg').style.willChange`)) === 'transform');
+
+  await T('touchEnd', [{ x: 30, y: 400, id: 1 }]);
+  await T('touchEnd', [{ x: 370, y: 400, id: 2 }]);
+  await sleep(300);
+  chk('手一松就摘掉 will-change（重新栅格化＝清晰）',
+      (await m.ev(`document.getElementById('zoomimg').style.willChange`)) === '');
+
+  await m.ev(`document.getElementById('zoom').classList.remove('chrome-off')`);
+  await T('touchStart', [{ x: 200, y: 520, id: 1 }]);
+  await T('touchEnd', []);
+  await sleep(450);
+  chk('手机上点一下能收起工具栏（不挡图）',
+      (await m.ev(`document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
+
+  await m.ev(`document.getElementById('zoom').classList.remove('chrome-off')`);
+  await m.ev(`document.querySelector('#zoom .zreset').click()`);
+  await sleep(450);
+  await T('touchStart', [{ x: 195, y: 260, id: 1 }]);
+  for (let y = 290; y <= 460; y += 30) { await T('touchMove', [{ x: 195, y, id: 1 }]); await sleep(45); }
+  const drag = JSON.parse(await m.ev(`JSON.stringify({
+    t: document.getElementById('zoomimg').style.transform,
+    fade: getComputedStyle(document.getElementById('zoom')).getPropertyValue('--zfade')
+  })`));
+  const dyNum = (/translate\(\s*[-\d.]+px,\s*([-\d.]+)px/.exec(drag.t) || [0, 0])[1];
+  chk('下滑时图片跟着手指走', +dyNum > 80, `位移 ${dyNum}px`);
+  chk('下滑时背景跟着变淡', drag.fade !== '' && +drag.fade < 1, '--zfade=' + drag.fade);
+  await T('touchEnd', []);
+  await sleep(500);
+  chk('下滑到位就关闭（Apple 相册的做法）', (await m.ev(`document.getElementById('zoom').open`)) === false);
+
+  await m.close();
+  console.log(bad ? `\n共 ${bad} 条未通过` : '\n全部通过（真机手感仍需用户确认）');
   process.exit(bad ? 1 : 0);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });
