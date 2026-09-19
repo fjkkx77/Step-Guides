@@ -36,6 +36,8 @@ const scaleOf = `(() => {
 
   await c.ev(`document.querySelector('.page img').click()`);
   await waitFor(c, `!!(window.SGZoom && document.getElementById('zoom').open && document.querySelector('#zoom .zclose'))`);
+  await waitFor(c, `(() => { const i = document.getElementById('zoomimg');
+    return !!(i && i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width > 0); })()`);
   await sleep(200);
 
   const st = JSON.parse(await c.ev(`JSON.stringify({
@@ -111,7 +113,11 @@ const scaleOf = `(() => {
   await waitFor(m, `!!document.querySelector('.page img')`);
   await m.ev(`document.querySelector('.page img').click()`);
   await waitFor(m, `!!document.querySelector('#zoom .zclose')`);
-  await sleep(300);
+  // 必须等图片真的加载并排好版再做手势：线上比本地慢，早一步做手势就什么都不会发生
+  // （这一条让我误判成"线上捏合坏了"）
+  await waitFor(m, `(() => { const i = document.getElementById('zoomimg');
+    return !!(i && i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width > 0); })()`);
+  await sleep(250);
 
   const T = (type, pts) => m.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
   const mScale = async () => +(await m.ev(scaleOf));
