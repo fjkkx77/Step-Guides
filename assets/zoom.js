@@ -118,7 +118,8 @@
     /* ── 指针事件：一套覆盖鼠标和触摸 ───────────── */
     box.addEventListener('pointerdown', e => {
       if (e.pointerType !== 'mouse') lastTouchAt = Date.now();
-      box.setPointerCapture(e.pointerId);
+      // 合成出来的指针事件（自检脚本、某些辅助工具）没有"活动指针"，这里会抛，兜住
+      try { box.setPointerCapture(e.pointerId); } catch (err) { /* 不影响后面的逻辑 */ }
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       gpu(true);
 
