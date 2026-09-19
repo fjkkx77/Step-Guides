@@ -85,7 +85,9 @@
           <button type="button" data-op="down" aria-label="下移">↓</button>
           <button type="button" data-op="more" aria-label="更多">⋯</button>
         </div>`;
-      card.querySelector('img').src = s.url;
+      const th = card.querySelector('.thumb');
+      th.querySelector('img').src = s.url;
+      th.addEventListener('click', () => openZoom(s.url, `第 ${i + 1} 步的图`));
       card.querySelector('.stitle').value = s.title || '';
       const ta = card.querySelector('.stext');
       ta.value = s.text || '';
@@ -162,22 +164,97 @@
     render(); save();
   }
 
+  /** 真正换掉第 i 步的图 */
+  async function replaceImage(i, f) {
+    if (!f || !f.type.startsWith('image/')) return false;
+    const bmp = await createImageBitmap(f).catch(() => null);
+    if (!bmp) { alert('这张图读不出来'); return false; }
+    const old = draft.steps[i];
+    if (old.remote) draft.gone = [...(draft.gone || []), old.remote];   // 线上那份也要删
+    draft.steps[i] = { ...old, blob: f, remote: null, url: URL.createObjectURL(f),
+                       w: bmp.width, h: bmp.height };
+    bmp.close?.();
+    render(); save();
+    return true;
+  }
+
+  /** 换图弹层：选文件、粘贴剪贴板、长按粘贴框，三条路都给 */
   function swap(i) {
-    const inp = document.createElement('input');
-    inp.type = 'file';
-    inp.accept = 'image/*';
-    inp.onchange = async () => {
-      const f = inp.files[0];
-      if (!f) return;
-      const bmp = await createImageBitmap(f).catch(() => null);
-      if (!bmp) return;
-      const s = draft.steps[i];
-      if (s.remote) draft.gone = [...(draft.gone || []), s.remote];
-      draft.steps[i] = { ...s, blob: f, remote: null, url: URL.createObjectURL(f), w: bmp.width, h: bmp.height };
-      bmp.close?.();
-      render(); save();
+    const dlg = $('#dlg-swap');
+    $('#swap-title').textContent = `换掉第 ${i + 1} 步的图`;
+    const done = async f => { if (await replaceImage(i, f)) dlg.close(); };
+
+    const pick = $('#swap-pick');
+    pick.value = '';
+    pick.onchange = () => done(pick.files[0]);
+
+    $('#swap-clip').onclick = async () => {
+      const f = await readClipboardImage();
+      if (f) done(f);
     };
-    inp.click();
+
+    const box = $('#swap-paste');
+    box.textContent = '';
+    box.onpaste = e => {
+      e.stopPropagation();
+      const f = [...(e.clipboardData ? e.clipboardData.files : [])].find(x => x.type.startsWith('image/'));
+      if (f) { e.preventDefault(); box.textContent = ''; done(f); return; }
+      setTimeout(async () => {                       // iOS 那种只塞 <img> 的情况
+        const im = box.querySelector('img');
+        box.textContent = '';
+        if (!im) return;
+        try {
+          const blob = await fetch(im.src).then(r => r.blob());
+          done(new File([blob], 'paste.' + (blob.type.split('/')[1] || 'png'), { type: blob.type }));
+        } catch (err) { /* 拿不到就算了 */ }
+      }, 120);
+    };
+
+    $('#swap-cancel').onclick = () => dlg.close();
+    dlg.showModal();
+  }
+
+  /** 读剪贴板里的第一张图，读不到就返回 null（两处在用：加图、换图） */
+  async function readClipboardImage() {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      alert('这个浏览器不支持直接读剪贴板，用下面的粘贴框（长按 → 粘贴）。');
+      return null;
+    }
+    try {
+      for (const it of await navigator.clipboard.read()) {
+        const type = it.types.find(t => t.startsWith('image/'));
+        if (!type) continue;
+        const blob = await it.getType(type);
+        return new File([blob], 'paste-' + Date.now() + '.' + type.split('/')[1], { type });
+      }
+      alert('剪贴板里没有图片');
+    } catch (e) {
+      alert('读剪贴板没成功：' + e.message + '。用下面的粘贴框（长按 → 粘贴）试试。');
+    }
+    return null;
+  }
+
+  /* ── 点缩略图放大看 ───────────────────────────────── */
+  let zoomer = null;
+  function openZoom(src, alt) {
+    const dlg = $('#zoom');
+    if (!dlg.querySelector('.zbar')) {                 // 补出工具栏（跟阅读页同款）
+      const bar = document.createElement('div');
+      bar.className = 'zbar';
+      bar.innerHTML = '<span class="zpct">100%</span>' +
+        '<button class="zreset" type="button">还原</button>' +
+        '<button class="zclose" type="button">✕ 关闭</button>';
+      dlg.appendChild(bar);
+      const tip = document.createElement('div');
+      tip.className = 'ztip';
+      tip.textContent = matchMedia('(pointer: fine)').matches
+        ? '滚轮缩放 · 双击放大 · 按住拖动 · Esc 关闭' : '双指捏合放大 · 双击放大 · 拖动查看';
+      dlg.appendChild(tip);
+      bar.querySelector('.zclose').onclick = () => dlg.close();
+      bar.querySelector('.zreset').onclick = () => zoomer && zoomer.reset();
+    }
+    if (!zoomer) zoomer = window.SGZoom.mount(dlg);
+    zoomer.open(src, alt);
   }
 
   /* ── 草稿 ─────────────────────────────────────────── */
@@ -345,28 +422,33 @@
 
   const b64 = str => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
 
-  /* ── 导出备份：一个自带图片的 HTML 文件 ───────────── */
-  async function exportOne() {
-    if (!draft.steps.length) { alert('还没有内容可以导出'); return; }
-    const [baseCss, readerCss, readerJs] = await Promise.all([
+  /* ── 阅读页 HTML 的生成（预览和导出共用一套） ───────
+     inlineImages=true  把图片转成 base64 塞进文件（导出，离线可看）
+     inlineImages=false 直接用现有的 blob:/线上地址（预览，快得多） */
+  async function buildReaderHtml(inlineImages) {
+    const [baseCss, readerCss, readerJs, zoomJs] = await Promise.all([
       fetch('../assets/base.css').then(r => r.text()),
       fetch('../assets/reader.css').then(r => r.text()),
-      fetch('../assets/reader.js').then(r => r.text())
+      fetch('../assets/reader.js').then(r => r.text()),
+      fetch('../assets/zoom.js').then(r => r.text())
     ]);
     const steps = [];
-    for (const s of draft.steps) {
-      const blob = s.blob ? (await compress(s.blob)).blob : await fetch(s.url).then(r => r.blob());
-      steps.push({
-        src: 'data:' + blob.type + ';base64,' + await toBase64(blob),
-        w: s.w, h: s.h, title: s.title || '', text: s.text || ''
-      });
+    for (const st of draft.steps) {
+      let src = st.url;
+      if (inlineImages) {
+        const blob = st.blob ? (await compress(st.blob)).blob : await fetch(st.url).then(r => r.blob());
+        src = 'data:' + blob.type + ';base64,' + await toBase64(blob);
+      }
+      steps.push({ src, w: st.w, h: st.h, title: st.title || '', text: st.text || '' });
     }
-    const html = `<!DOCTYPE html>
+    const data = { title: draft.title || '（还没起标题）', steps };
+    return `<!DOCTYPE html>
 <html lang="zh-CN" data-mode="step">
 <head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>${esc(draft.title)}</title>
-<style>${baseCss}\n${readerCss}</style></head>
+<title>${esc(data.title)}</title>
+<style>${baseCss}
+${readerCss}</style></head>
 <body>
 <header class="top"><h1 id="title"></h1>
 <button class="modebtn tap" id="modebtn" type="button">☰ 长文</button></header>
@@ -375,11 +457,25 @@
 <nav class="bottom"><button class="tap" id="prev" type="button">‹ 上一步</button>
 <span class="count" id="count">1 / 1</span>
 <button class="tap" id="next" type="button">下一步 ›</button></nav>
-<dialog id="zoom"><div class="box"><img id="zoomimg" alt=""></div>
-<button class="close" type="button" aria-label="关闭">✕</button></dialog>
-<script>window.__DATA=${JSON.stringify({ title: draft.title, steps })};<\/script>
+<dialog id="zoom"><div class="box"><img id="zoomimg" alt=""></div></dialog>
+<script>window.__DATA=${JSON.stringify(data)};<\/script>
+<script>${zoomJs}<\/script>
 <script>${readerJs}<\/script>
 </body></html>`;
+  }
+
+  /** 发布前看一眼：同一套阅读器，只是数据来自当前草稿 */
+  async function openPreview() {
+    if (!draft.steps.length) { alert('还没有内容可以预览'); return; }
+    const dlg = $('#dlg-preview');
+    dlg.showModal();
+    $('#pvframe').srcdoc = await buildReaderHtml(false);
+  }
+
+  /* ── 导出备份：一个自带图片的 HTML 文件 ───────────── */
+  async function exportOne() {
+    if (!draft.steps.length) { alert('还没有内容可以导出'); return; }
+    const html = await buildReaderHtml(true);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
     a.download = (draft.title || '教程') + '.html';
@@ -538,26 +634,9 @@
      ① navigator.clipboard.read()（iOS Safari 会弹一个「粘贴」确认，安卓 Chrome 要权限）
      ② 一个可长按的框：长按 → 系统菜单「粘贴」→ 触发 paste 事件 */
   async function pasteFromClipboard() {
-    if (!navigator.clipboard || !navigator.clipboard.read) {
-      alert('这个浏览器不支持直接读剪贴板。在下面那个虚线框里长按，选「粘贴」也一样。');
-      $('#pastebox').focus();
-      return;
-    }
-    try {
-      const items = await navigator.clipboard.read();
-      const files = [];
-      for (const it of items) {
-        const type = it.types.find(t => t.startsWith('image/'));
-        if (!type) continue;
-        const blob = await it.getType(type);
-        files.push(new File([blob], 'paste-' + Date.now() + '.' + type.split('/')[1], { type }));
-      }
-      if (!files.length) { alert('剪贴板里没有图片'); return; }
-      await addFiles(files);
-    } catch (e) {
-      alert('读剪贴板没成功：' + e.message + '。在下面那个虚线框里长按选「粘贴」试试。');
-      $('#pastebox').focus();
-    }
+    const f = await readClipboardImage();
+    if (f) await addFiles([f]);
+    else $('#pastebox').focus();
   }
 
   /** 粘贴框：既接 paste 事件里的文件，也兜住「图片被直接塞进框里」的情况（iOS 有时这样） */
@@ -596,6 +675,42 @@
       if (box.querySelector('img')) return;
       if (box.textContent.trim()) box.textContent = '';
     });
+  }
+
+  /* ── 保存 / 丢弃 / 返回 ──────────────────────────────
+     草稿本来就是随敲随存的，但"看不见的自动保存"让人不放心，
+     所以给一个明确的保存键 + 一句看得见的回执。 */
+  async function saveNow() {
+    clearTimeout(saveTimer);
+    await Store.save({
+      id: draft.id, title: draft.title, gone: draft.gone || [],
+      steps: draft.steps.map(st => ({ key: st.key, blob: st.blob || null, remote: st.remote || null,
+                                      w: st.w, h: st.h, title: st.title, text: st.text }))
+    });
+    const tag = $('#savetag');
+    tag.hidden = false;
+    tag.textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    clearTimeout(tag._t);
+    tag._t = setTimeout(() => { tag.hidden = true; }, 4000);
+  }
+
+  async function discardDraft() {
+    if (!confirm('丢弃这份草稿？图片和文字都会清掉，已经发布过的教程不受影响。')) return;
+    await Store.clear();
+    draft = { id: null, title: '', steps: [], gone: [] };
+    $('#title').value = '';
+    render();
+    $('#dlg-settings').close();
+  }
+
+  /** 离开前问一句，别让人手滑点返回就丢了半小时的活 */
+  async function leaveTo(url) {
+    if (draft.steps.length || draft.title.trim()) {
+      const ans = confirm('离开这里？\n\n「确定」= 先保存草稿再走（下次回来还能接着写）\n「取消」= 留在这继续写');
+      if (!ans) return;
+      await saveNow();
+    }
+    location.href = url;
   }
 
   /* ── 设置 ─────────────────────────────────────────── */
@@ -705,8 +820,14 @@
     wirePasteBox();
     $('#btn-qr-close').onclick = () => { $('#qr-img').src = ''; $('#dlg-qr').close(); };
     $('#btn-publish').onclick = doPublish;
+    $('#btn-preview').onclick = openPreview;
+    $('#pv-close').onclick = () => { $('#pvframe').srcdoc = ''; $('#dlg-preview').close(); };
+    $('#btn-save').onclick = saveNow;
+    $('#btn-back').onclick = () => leaveTo('../mine/');
     $('#btn-export').onclick = exportOne;
-    $('#btn-mine').onclick = () => location.href = '../mine/';
+    $('#btn-discard').onclick = discardDraft;
+    $('#btn-mine').onclick = () => { $('#dlg-settings').close(); leaveTo('../mine/'); };
+    $('#btn-home').onclick = () => { $('#dlg-settings').close(); leaveTo('../'); };
 
     // 扫码进来的先处理导入（它只改设置，不碰草稿）
     importFromHash();
@@ -722,7 +843,8 @@
 
   // 给验证脚本用的测试口（也方便自己在控制台里手动检查状态）
   window.SGWriter = { addFiles, render, b64url, unb64url, cfgToUrl, cfgFromUrl, askImport,
-                      startScan, stopScan, ensureDecoder, get draft() { return draft; } };
+                      startScan, stopScan, ensureDecoder, openPreview, openZoom, swap,
+                      replaceImage, saveNow, buildReaderHtml, get draft() { return draft; } };
 
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', boot) : boot();
 })();

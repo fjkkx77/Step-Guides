@@ -93,6 +93,8 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 }
 .wbottom button{
   height:var(--tap);border-radius:12px;font-size:16px;
+  white-space:nowrap;                  /* 底栏一行三个键，宁可挤也别换行（换行会把按钮撑高） */
+  padding:0 6px;min-width:0;
   border:1px solid var(--line);background:var(--card);color:var(--ink);
   display:flex;align-items:center;justify-content:center;gap:5px;flex:1;
 }
@@ -199,3 +201,48 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   position:absolute;width:62%;aspect-ratio:1;border:3px solid rgba(255,255,255,.9);
   border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.28);pointer-events:none;
 }
+
+
+/* ── 顶栏的返回与保存提示 ───────────────────────────── */
+.wtop .iconbtn#btn-back{font-size:26px;line-height:1}
+.savetag{
+  flex:0 0 auto;font-size:13px;color:var(--muted);
+  padding:0 8px;white-space:nowrap;
+}
+
+/* 设置弹层里的分隔线与次要操作 */
+.sep{border:0;border-top:1px solid var(--line);margin:16px 0 12px}
+
+/* 换图弹层里的「选文件」做成和按钮一样 */
+.swapbtn{
+  display:flex;align-items:center;justify-content:center;
+  height:var(--tap);border-radius:12px;
+  border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:16px;
+}
+
+/* 步骤卡的缩略图：点了能放大看 */
+.step .thumb{cursor:zoom-in}
+.step .thumb::after{
+  content:'🔍';position:absolute;right:4px;bottom:4px;
+  font-size:12px;background:rgba(0,0,0,.45);color:#fff;
+  width:20px;height:20px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* ── 预览层：整屏套一个真的阅读页 ─────────────────── */
+#dlg-preview{
+  width:100vw;height:100dvh;max-width:100vw;max-height:100dvh;
+  border-radius:0;background:var(--bg);
+}
+.pvwrap{display:flex;flex-direction:column;height:100dvh}
+.pvbar{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;
+  border-bottom:1px solid var(--line);background:var(--card);font-size:14px;color:var(--muted);
+}
+.pvbar b{color:var(--brand)}
+.pvbar button{
+  height:var(--tap);padding:0 14px;border-radius:12px;
+  background:var(--bg);border:1px solid var(--line);color:var(--ink);font-size:15px;
+}
+#pvframe{flex:1;min-height:0;width:100%;border:0;background:var(--bg)}

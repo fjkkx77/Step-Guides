@@ -6,6 +6,17 @@
 (() => {
   'use strict';
 
+  // 记下自己所在的目录：老教程的壳子里没有引 zoom.js，要靠这个路径按需去取。
+  // 这样改了阅读器，历史教程不用重新发布也能用上新功能。
+  // 按需加载 zoom.js 时要用的目录。导出/预览时这份代码是内联的：
+  // currentScript.src 为空，而 iframe 的 location 是 about:srcdoc —— 那不是合法基址，
+  // new URL() 会抛错并把整个阅读器打断（踩过）。所以包住，拿不到就置空，
+  // 反正那两种场景里 zoom.js 已经一起内联进去了。
+  let ASSETS = '';
+  try {
+    ASSETS = new URL('.', (document.currentScript && document.currentScript.src) || location.href).href;
+  } catch (e) { ASSETS = ''; }
+
   const MODE_KEY = 'sg.readMode';
   const $ = s => document.querySelector(s);
   const el = (tag, cls, txt) => {
@@ -129,11 +140,54 @@
   }
 
   /* ── 放大层 ───────────────────────────────────────── */
-  function openZoom(src, alt) {
-    const dlg = $('#zoom');
-    $('#zoomimg').src = src;
-    $('#zoomimg').alt = alt;
-    dlg.showModal();
+  let zoomer = null;
+
+  const loadOnce = src => new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error('加载失败 ' + src));
+    document.head.appendChild(sc);
+  });
+
+  /** 把弹层补成新结构：顶部一条工具栏（倍率 + 醒目的关闭），底部一句操作提示。
+      老教程的壳子只有 .box + img + .close，这里缺什么补什么。 */
+  function upgradeZoomDom() {
+    let dlg = $('#zoom');
+    if (!dlg) {
+      dlg = document.createElement('dialog');
+      dlg.id = 'zoom';
+      dlg.innerHTML = '<div class="box"><img id="zoomimg" alt=""></div>';
+      document.body.appendChild(dlg);
+    }
+    if (!dlg.querySelector('.box')) {
+      const box = el('div', 'box');
+      box.appendChild(dlg.querySelector('img') || Object.assign(new Image(), { id: 'zoomimg' }));
+      dlg.prepend(box);
+    }
+    dlg.querySelector('.close')?.remove();       // 换成带文字的高对比按钮
+    if (!dlg.querySelector('.zbar')) {
+      const bar = el('div', 'zbar');
+      bar.innerHTML = '<span class="zpct">100%</span>' +
+        '<button class="zreset" type="button">还原</button>' +
+        '<button class="zclose" type="button">✕ 关闭</button>';
+      dlg.appendChild(bar);
+      const tip = el('div', 'ztip');
+      tip.textContent = matchMedia('(pointer: fine)').matches
+        ? '滚轮缩放 · 双击放大 · 按住拖动 · Esc 关闭'
+        : '双指捏合放大 · 双击放大 · 拖动查看';
+      dlg.appendChild(tip);
+      bar.querySelector('.zclose').addEventListener('click', () => dlg.close());
+      bar.querySelector('.zreset').addEventListener('click', () => zoomer && zoomer.reset());
+    }
+    return dlg;
+  }
+
+  async function openZoom(src, alt) {
+    const dlg = upgradeZoomDom();
+    if (!zoomer) {
+      if (!window.SGZoom) await loadOnce(ASSETS + 'zoom.js');
+      zoomer = window.SGZoom.mount(dlg);
+    }
+    zoomer.open(src, alt);
   }
 
   /* ── 启动 ─────────────────────────────────────────── */
@@ -164,8 +218,8 @@
       if (e.key === 'ArrowLeft') goto(cur - 1);
     });
 
-    const dlg = $('#zoom');
-    dlg.addEventListener('click', e => { if (e.target !== $('#zoomimg')) dlg.close(); });
+    // 放大后要能按住拖动，所以不能再"点图以外任何地方就关"——
+    // 拖到图外一松手就会误关。关闭只认工具栏按钮和 Esc。
 
     // 导出的单文件版把数据内嵌在 window.__DATA，不再去取 data.json
     (window.__DATA

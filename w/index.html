@@ -13,7 +13,9 @@
 <body>
 
 <header class="wtop">
+  <button class="iconbtn tap" id="btn-back" type="button" aria-label="返回">‹</button>
   <input id="title" type="text" placeholder="教程标题，例如：教你设置专注模式" autocomplete="off">
+  <span class="savetag" id="savetag" hidden>已保存</span>
   <button class="iconbtn tap" id="btn-settings" type="button" aria-label="设置">⚙</button>
 </header>
 
@@ -32,8 +34,8 @@
 </div>
 
 <footer class="wbottom">
-  <button class="tap" id="btn-mine" type="button">我的教程</button>
-  <button class="tap" id="btn-export" type="button">导出备份</button>
+  <button class="tap" id="btn-preview" type="button">👁 预览</button>
+  <button class="tap" id="btn-save" type="button">💾 保存</button>
   <button class="tap go" id="btn-publish" type="button">发布</button>
 </footer>
 
@@ -60,7 +62,46 @@
       <button class="tap" id="btn-qr" type="button">📱 出码（在电脑上点）</button>
       <button class="tap" id="btn-scan" type="button">📷 扫码（在手机上点）</button>
     </div>
+    <hr class="sep">
+    <div class="stack">
+      <button class="tap" id="btn-mine" type="button">📚 我的教程</button>
+      <button class="tap" id="btn-home" type="button">🏠 回首页</button>
+      <button class="tap" id="btn-export" type="button">⬇ 导出备份（单文件 HTML）</button>
+      <button class="tap danger" id="btn-discard" type="button">🗑 丢弃这份草稿</button>
+    </div>
   </div>
+</dialog>
+
+<!-- 换图：除了选文件，也能粘贴 -->
+<dialog id="dlg-swap">
+  <div class="sheet">
+    <h2 id="swap-title">换一张图</h2>
+    <p>选一张新的，或者直接把截图粘进来。</p>
+    <div class="stack">
+      <label class="tap swapbtn" for="swap-pick">📁 从文件 / 相册选</label>
+      <input id="swap-pick" type="file" accept="image/*" hidden>
+      <button class="tap" id="swap-clip" type="button">📋 粘贴剪贴板里的图</button>
+    </div>
+    <div class="pastebox" id="swap-paste" contenteditable="true" role="textbox"
+         aria-label="在这里长按然后选粘贴" data-ph="或在这个框里长按 → 选「粘贴」"></div>
+    <div class="row"><button class="tap" id="swap-cancel" type="button">取消</button></div>
+  </div>
+</dialog>
+
+<!-- 发布前的整体预览 -->
+<dialog id="dlg-preview">
+  <div class="pvwrap">
+    <div class="pvbar">
+      <span>预览 · <b>还没发布</b></span>
+      <button class="tap" id="pv-close" type="button">✕ 关闭预览</button>
+    </div>
+    <iframe id="pvframe" title="预览"></iframe>
+  </div>
+</dialog>
+
+<!-- 写作页里点缩略图也能放大看 -->
+<dialog id="zoom">
+  <div class="box"><img id="zoomimg" alt=""></div>
 </dialog>
 
 <!-- 手机端扫码：站内直接开摄像头，不用另外开相机 App -->
@@ -127,6 +168,7 @@
 </dialog>
 
 <script src="../assets/vendor/qrcode.js"></script>
+<script src="../assets/zoom.js"></script>
 <script src="../assets/img.js"></script>
 <script src="../assets/github.js"></script>
 <script src="../assets/store.js"></script>

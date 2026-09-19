@@ -24,13 +24,16 @@
     display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
   }
   .card .ops .go{background:var(--brand);color:#fff;border-color:transparent}
+  .pagetitle{flex:1;min-width:0;margin:0;font-size:17px;font-weight:600}
+  .wtop .iconbtn#btn-home{font-size:26px;line-height:1}
 </style>
 </head>
 <body>
 
 <header class="wtop">
-  <input id="title" type="text" value="我的教程" readonly>
-  <button class="iconbtn tap" id="btn-new" type="button" aria-label="新建">＋</button>
+  <button class="iconbtn tap" id="btn-home" type="button" aria-label="回首页">‹</button>
+  <h1 class="pagetitle">我的教程</h1>
+  <button class="iconbtn tap" id="btn-new" type="button" aria-label="新建教程">＋</button>
 </header>
 
 <main class="list" id="list"><div class="empty">正在读取…</div></main>
@@ -39,6 +42,7 @@
 (async () => {
   const list = document.getElementById('list');
   document.getElementById('btn-new').onclick = () => location.href = '../w/';
+  document.getElementById('btn-home').onclick = () => location.href = '../';
   try {
     const r = await fetch('../list.json?cb=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
