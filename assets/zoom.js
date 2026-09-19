@@ -13,9 +13,10 @@
 
   const MIN = 1, MAX = 8, DBL = 2.5;
   const TAP_MOVE = 8;        // 手指移动超过这个距离就不算"点"
-  const TAP_MS = 260;        // 按下到抬起超过这么久也不算"点"
+  const TAP_MS = 500;        // 按下到抬起多久之内算"点"。260 太严：手指按一下停顿再抬
+                             // 就判不成点了（自动化里两次往返也会超）。500 仍远低于长按
   const DBL_MS = 300;        // 两次点击间隔在这之内算双击
-  const CHROME_MS = 2200;    // 工具栏自动淡出的等待时间
+  const CHROME_MS = 3000;    // 刚打开时工具栏停留多久再自动淡出（只有这一次是自动的）
   const DISMISS_AT = 110;    // 下滑多少距离就关闭
   const FLING = 0.55;        // 甩动速度阈值 px/ms（参考自己的手势配方，慢拉不关、快甩就关）
 
@@ -77,14 +78,16 @@
     const reset = () => { dismiss = null; dy = 0; animate(() => { scale = 1; tx = ty = 0; }); };
 
     /* ── 工具栏自动隐藏 ─────────────────────────── */
+    /** auto=true 才会自动淡出。用户主动唤回的（点一下画面）就一直留着，
+        等他再点一下才收 —— 自动收会出现"还没来得及点就没了"（用户反馈） */
     function showChrome(auto) {
       dlg.classList.remove('chrome-off');
       clearTimeout(chromeTimer);
       if (auto) chromeTimer = setTimeout(() => dlg.classList.add('chrome-off'), CHROME_MS);
     }
     const toggleChrome = () => {
-      if (dlg.classList.contains('chrome-off')) showChrome(true);
-      else dlg.classList.add('chrome-off');
+      if (dlg.classList.contains('chrome-off')) showChrome(false);   // 点出来的就别再自动收
+      else { clearTimeout(chromeTimer); dlg.classList.add('chrome-off'); }
     };
 
     /* ── 电脑：滚轮 / 双击 / 鼠标移动唤回工具栏 ──── */
@@ -104,10 +107,17 @@
       animate(() => zoomAt(e.clientX, e.clientY, scale > 1.01 ? 1 : DBL));
     });
 
-    box.addEventListener('mousemove', () => showChrome(true));
+    /* 触摸之后浏览器会补发一串兼容鼠标事件（ghost）。
+       不挡住的话：轻点 → 补发的 mousemove 触发"动鼠标就唤回" → 300ms 后我们自己的
+       切换又把它收回去，表现成"点了没反应"。踩过，这里按时间窗口忽略。 */
+    let lastTouchAt = 0;
+    const ghost = () => Date.now() - lastTouchAt < 700;
+
+    box.addEventListener('mousemove', () => { if (!ghost()) showChrome(true); });
 
     /* ── 指针事件：一套覆盖鼠标和触摸 ───────────── */
     box.addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'mouse') lastTouchAt = Date.now();
       box.setPointerCapture(e.pointerId);
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       gpu(true);
@@ -165,9 +175,19 @@
     });
 
     function endPointer(e) {
+      if (e.pointerType !== 'mouse') lastTouchAt = Date.now();
       const had = pts.delete(e.pointerId);
       if (pts.size < 2) pinch = null;
       if (!had) return;
+
+      // 双指变单指的瞬间：剩下那根手指的"上一次位置"还停留在它按下时的坐标，
+      // 下一次 move 会拿几百像素的差值去平移 —— 这就是"松手时图片跳一下"。
+      // 把基准重置成它现在的位置，接着拖才是连续的。
+      if (pts.size === 1) {
+        const [only] = [...pts.values()];
+        last = { x: only.x, y: only.y };
+        down = null;                       // 也不再把它当成"点"
+      }
 
       // 先判"这一下算不算轻点"：手机上没放大时每次按下都会进入下滑关闭的分支，
       // 若在这里直接 return，轻点就永远走不到下面的「切换工具栏」（踩过）
@@ -185,6 +205,10 @@
       if (dismiss && isTap) { dismiss = null; dy = 0; paint(); }
 
       if (pts.size === 0) {
+        // 收尾时把越界的位移用动画收回去（直接改会看到"啪"一下）
+        const bx = tx, by = ty;
+        clamp();
+        if (Math.abs(bx - tx) > 0.5 || Math.abs(by - ty) > 0.5) animate(() => {});
         gpu(false);                               // 手一松就摘掉 will-change，画面重新栅格化
         // 点（没怎么移动、时间也短）：双击＝缩放，单击＝显示/隐藏工具栏
         if (isTap) {
@@ -201,6 +225,7 @@
             clearTimeout(box._tapT);
             box._tapT = setTimeout(() => {        // 等一下，确认不是双击的第一下
               if (kind === 'mouse') {
+                if (ghost()) return;                 // 触摸补发的假鼠标事件，不当成点击
                 if (tgt !== img) dlg.close();        // 电脑：点空白处关闭
               } else {
                 toggleChrome();                      // 手机：点一下收起/唤回工具栏

@@ -47,7 +47,10 @@ async function run(w, h, label) {
     })()`));
     chk('面板打开了', open1.shown === true);
     chk('每一步都有一格缩略图', open1.cells === total, `${open1.cells} 格 / ${total} 步`);
-    chk('缩略图格子够大（好点）', open1.cellW >= 88 && open1.cellH >= 100, `${open1.cellW}×${open1.cellH}`);
+    // 两种版式：手机是网格（高一些），电脑是目录列表（宽一些、行矮）。
+    // 判据只管"好不好点"，别把某一种版式的数值写死
+    chk('每一格都好点（≥44px 且不至于太小）',
+        open1.cellH >= 56 && open1.cellW >= 88, `${open1.cellW}×${open1.cellH}`);
     chk('面板没有超出屏幕', open1.panelLeft >= -1 && open1.panelW <= w + 1 && open1.panelTop >= -1,
         `${open1.panelW}×${open1.panelH} @${open1.panelLeft},${open1.panelTop}`);
     chk('无横向溢出', (await c.ev(`document.documentElement.scrollWidth`)) <= w + 1);

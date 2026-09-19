@@ -82,8 +82,7 @@
         </div>
         <div class="ops">
           <div class="handle" title="按住拖动排序" draggable="true">⠿</div>
-          <button class="icon" type="button" data-op="up" aria-label="上移">↑</button>
-          <button class="icon" type="button" data-op="down" aria-label="下移">↓</button>
+          <button class="grow" type="button" data-op="to">⇅ 移到…</button>
           <button class="grow" type="button" data-op="swap">🖼 换图</button>
           <button class="grow danger" type="button" data-op="del">🗑 删除</button>
         </div>`;
@@ -185,10 +184,12 @@
 
   /** 点序号 = 移到第几步（低频操作放在"点序号改序号"这个自然的位置上，
       不占卡片上的按钮位；换图/删除那两个高频的已经提到一级了） */
+  /** 把第 i 步移到第几步。相邻交换用拖动就行，这个解决的是"第 2 步挪到第 29 步"那种长距离移动 */
   function openMoveTo(i) {
     const n = draft.steps.length;
     const dlg = $('#dlg-more');
-    $('#m-title').textContent = `第 ${i + 1} 步 · 移到哪儿？`;
+    $('#m-title').textContent = `把第 ${i + 1} 步移到第几步？`;
+    $('#m-desc').textContent = `一共 ${n} 步，点一个数字就挪过去（当前位置是 ${i + 1}）`;
     $('#m-chips').innerHTML = Array.from({ length: n }, (_, k) =>
       `<button type="button" class="chip${k === i ? ' now' : ''}" data-to="${k}">${k + 1}</button>`).join('');
     $('#m-chips').onclick = e => {
@@ -197,8 +198,17 @@
       dlg.close();
       moveTo(i, +b.dataset.to);
     };
+    $('#m-first').disabled = i === 0;
+    $('#m-last').disabled = i === n - 1;
+    $('#m-first').onclick = () => { dlg.close(); moveTo(i, 0); };
+    $('#m-last').onclick = () => { dlg.close(); moveTo(i, n - 1); };
     $('#m-cancel').onclick = () => dlg.close();
     dlg.showModal();
+    // 步骤多的时候，把当前那个数字滚进视野
+    requestAnimationFrame(() => {
+      const now = $('#m-chips .chip.now');
+      if (now) now.scrollIntoView({ block: 'center' });
+    });
   }
 
   /** 删除：配方要求永远二次确认，且不用原生 confirm（自动化里会冻住，样式也不统一） */
@@ -845,8 +855,7 @@ ${zoomCss}</style></head>
       const btn = e.target.closest('button[data-op]');
       if (!btn) return;
       const i = +btn.closest('.step').dataset.i;
-      ({ up: () => move(i, -1), down: () => move(i, 1), to: () => openMoveTo(i),
-         swap: () => swap(i), del: () => del(i) })[btn.dataset.op]();
+      ({ to: () => openMoveTo(i), swap: () => swap(i), del: () => del(i) })[btn.dataset.op]();
     });
     $('#list').addEventListener('input', e => {
       const card = e.target.closest('.step');

@@ -188,7 +188,9 @@
       im.alt = '';
       const no = el('span', 'sno', String(i + 1));
       const cap = el('span', 'scap', s.title || s.text || '');
-      cell.append(im, no, cap);
+      const shot = el('span', 'sthumb');       // 电脑端要把序号压在缩略图角上，得有个定位容器
+      shot.append(im, no);
+      cell.append(shot, cap);
       cell.addEventListener('click', () => { closeSteps(); goto(i); });
       return cell;
     }));

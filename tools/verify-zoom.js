@@ -141,8 +141,23 @@ const scaleOf = `(() => {
   chk('捏合进行中开着 will-change（跟手）',
       (await m.ev(`document.getElementById('zoomimg').style.willChange`)) === 'transform');
 
+  // 抬起其中一根手指：剩下那根继续动时不能跳（旧版会拿"按下瞬间的坐标"算位移）
+  const beforeLift = await m.ev(`document.getElementById('zoomimg').style.transform`);
   await T('touchEnd', [{ x: 30, y: 400, id: 1 }]);
-  await T('touchEnd', [{ x: 370, y: 400, id: 2 }]);
+  await sleep(120);
+  const afterLift = await m.ev(`document.getElementById('zoomimg').style.transform`);
+  chk('抬起一根手指的瞬间画面不跳', beforeLift === afterLift, `${beforeLift} -> ${afterLift}`);
+
+  // 剩下那根手指移动 40px，位移也应该只变 40px 左右，不是几百
+  const num = t => +((/translate\(([-\d.]+)px/.exec(t) || [0, 0])[1]);
+  await T('touchMove', [{ x: 410, y: 400, id: 2 }]);
+  await sleep(150);
+  const afterMove = await m.ev(`document.getElementById('zoomimg').style.transform`);
+  chk('单指接着拖是连续的（没有几百像素的跳变）',
+      Math.abs(num(afterMove) - num(afterLift)) < 60,
+      `${num(afterLift).toFixed(0)} -> ${num(afterMove).toFixed(0)}`);
+
+  await T('touchEnd', [{ x: 410, y: 400, id: 2 }]);
   await sleep(300);
   chk('手一松就摘掉 will-change（重新栅格化＝清晰）',
       (await m.ev(`document.getElementById('zoomimg').style.willChange`)) === '');
@@ -153,6 +168,16 @@ const scaleOf = `(() => {
   await sleep(450);
   chk('手机上点一下能收起工具栏（不挡图）',
       (await m.ev(`document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
+
+  // 再点一下唤回：这次不能再自动消失（用户反馈"还没来得及点就没了"）
+  await T('touchStart', [{ x: 200, y: 520, id: 1 }]);
+  await T('touchEnd', []);
+  await sleep(500);
+  const backOn = await m.ev(`!document.getElementById('zoom').classList.contains('chrome-off')`);
+  chk('再点一下工具栏回来', backOn === true);
+  await sleep(3800);                      // 比自动淡出的 3 秒还久
+  chk('主动唤回后不会自己再消失',
+      (await m.ev(`!document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
 
   await m.ev(`document.getElementById('zoom').classList.remove('chrome-off')`);
   await m.ev(`document.querySelector('#zoom .zreset').click()`);

@@ -187,6 +187,7 @@ html[data-mode="long"] .topbar-progress{display:none}
 .steps-grid{
   flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;
   display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));
+  align-content:start;                 /* 不加这条，行会被拉伸填满高度，中间留出大片空白 */
   gap:10px;padding:12px 14px 16px;
 }
 .scell{
@@ -194,6 +195,7 @@ html[data-mode="long"] .topbar-progress{display:none}
   background:var(--shot-bg);border:1px solid var(--line);
   aspect-ratio:3/4;
 }
+.sthumb{position:absolute;inset:0;display:block}
 .scell img{width:100%;height:100%;object-fit:cover;object-position:top center}
 .scell .sno{
   position:absolute;left:5px;top:5px;min-width:22px;height:22px;padding:0 6px;border-radius:11px;
@@ -208,14 +210,34 @@ html[data-mode="long"] .topbar-progress{display:none}
 }
 .scell.now{outline:3px solid var(--brand);outline-offset:-3px}
 
-/* 电脑上贴左边，像个目录栏 */
+/* 电脑上贴左边，做成「目录列表」而不是网格：
+   宽屏里一行塞两张竖图，横图又会被裁得乱七八糟，看着散。
+   一行一步（小缩略图 + 序号 + 说明）才像目录，也扛得住各种图片比例 */
 @media (min-width:900px){
   .steps-mask{align-items:stretch;justify-content:flex-start}
   .steps{
-    width:300px;max-width:82vw;max-height:none;height:100%;
+    width:320px;max-width:82vw;max-height:none;height:100%;
     border-radius:0 20px 20px 0;box-shadow:8px 0 30px rgba(0,0,0,.22);
     transform:translateX(-100%);
   }
   .steps-mask.on .steps{transform:none}
-  .steps-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+
+  .steps-grid{display:block;padding:8px 10px 14px}
+  .scell{
+    display:grid;grid-template-columns:58px 1fr;align-items:center;gap:10px;
+    width:100%;aspect-ratio:auto;height:auto;min-height:64px;
+    padding:8px;margin-bottom:8px;text-align:left;
+    background:var(--card);
+  }
+  .sthumb{position:relative;inset:auto;width:58px;height:58px;flex:0 0 58px}
+  .scell img{
+    width:58px;height:58px;border-radius:8px;
+    background:var(--shot-bg);border:1px solid var(--line);
+  }
+  .scell .sno{left:-4px;top:-4px}
+  .scell .scap{
+    position:static;padding:0;background:none;color:var(--ink2);
+    font-size:13px;line-height:1.5;-webkit-line-clamp:2;
+  }
+  .scell.now{background:rgba(91,87,216,.10);outline-offset:-2px}
 }

@@ -153,7 +153,11 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 
 /* ⋯ 浮层里的「移到第几步」：点数字就行，不用打字 */
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+.chips{
+  display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px;
+  max-height:38vh;overflow:auto;                 /* 二三十步时数字很多，让它自己滚 */
+  -webkit-overflow-scrolling:touch;
+}
 .chip{
   width:44px;height:44px;border-radius:12px;
   background:var(--bg);border:1px solid var(--line);color:var(--ink);font-size:16px;
