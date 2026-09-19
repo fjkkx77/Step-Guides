@@ -77,7 +77,15 @@ const probes = {
       await c.ev(`localStorage.setItem('sg.readMode', ${JSON.stringify(MODE)})`);
       await c.goto(target);
     }
-    await sleep(800);
+    // 别用固定 sleep 当"页面好了"：本地秒开、线上要等 data.json，
+    // 800ms 在线上会把"还没渲染完"误判成"渲染不出来"（2026-09-19 踩过）
+    let ready = false;
+    for (let i = 0; i < 40; i++) {
+      await sleep(250);
+      if (await c.ev(`!!document.querySelector('.page')`)) { ready = true; break; }
+    }
+    if (!ready) console.log('   （等了 10 秒仍没渲染出步骤，下面的断言会照实报 FAIL）');
+    await sleep(300);
 
     const out = {};
     for (const [k, expr] of Object.entries(probes)) out[k] = await c.ev(expr);
