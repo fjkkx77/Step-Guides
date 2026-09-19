@@ -234,6 +234,9 @@
     // 放大后要能按住拖动，所以不能再"点图以外任何地方就关"——
     // 拖到图外一松手就会误关。关闭只认工具栏按钮和 Esc。
 
+    // 样式提前预载：等第一次点图再取，会闪一下没样式的弹层（线上实测 sheet 还没 ready）
+    ensureZoomCss();
+
     // 导出的单文件版把数据内嵌在 window.__DATA，不再去取 data.json
     (window.__DATA
       ? Promise.resolve(window.__DATA)

@@ -19,6 +19,16 @@ const scaleOf = `(() => {
   let bad = 0;
   const chk = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${n}${d ? ' — ' + d : ''}`); if (!ok) bad++; };
 
+  // 还没点图，样式就该已经在了：等第一次点图再取会闪一下没样式的弹层
+  for (let i = 0; i < 30; i++) {
+    await sleep(200);
+    if (await c.ev(`(() => { const l = document.querySelector('link[data-sg-zoom]'); return !!(l && l.sheet); })()`)) break;
+  }
+  chk('进页面就预载了放大器样式（不等点图）', await c.ev(`(() => {
+    const l = document.querySelector('link[data-sg-zoom]');
+    return !!(l && l.sheet && l.sheet.cssRules.length > 5);
+  })()`));
+
   // 点图打开放大层（老教程的壳子里没有 zoom.js，应该被自动加载进来）
   await c.ev(`document.querySelector('.page img').click()`);
   // zoom.js/zoom.css 是按需取的，线上首次加载要等一会儿。
