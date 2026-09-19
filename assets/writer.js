@@ -240,13 +240,17 @@
     pick.value = '';
     pick.onchange = () => done(pick.files[0]);
 
-    $('#swap-clip').onclick = async () => {
-      const f = await readClipboardImage();
-      if (f) done(f);
-    };
-
     const box = $('#swap-paste');
     box.textContent = '';
+    box.hidden = true;                       // 有「粘贴剪贴板」按钮就够了，平时不占版面
+
+    $('#swap-clip').onclick = async () => {
+      const f = await readClipboardImage({ quiet: true });
+      if (f) { done(f); return; }
+      box.hidden = false;                    // 这条路走不通才亮出兜底的框
+      box.focus();
+    };
+
     box.onpaste = e => {
       e.stopPropagation();
       const f = [...(e.clipboardData ? e.clipboardData.files : [])].find(x => x.type.startsWith('image/'));
@@ -480,9 +484,12 @@
      inlineImages=true  把图片转成 base64 塞进文件（导出，离线可看）
      inlineImages=false 直接用现有的 blob:/线上地址（预览，快得多） */
   async function buildReaderHtml(inlineImages) {
-    const [baseCss, readerCss, readerJs, zoomJs] = await Promise.all([
+    // zoom.css 一定要一起内联：预览/导出是个自包含页面，取不到外部样式表；
+    // 少了它放大器会退化成没样式的样子（抽出独立文件时漏了这里，用户截图发现的）
+    const [baseCss, readerCss, zoomCss, readerJs, zoomJs] = await Promise.all([
       fetch('../assets/base.css').then(r => r.text()),
       fetch('../assets/reader.css').then(r => r.text()),
+      fetch('../assets/zoom.css').then(r => r.text()),
       fetch('../assets/reader.js').then(r => r.text()),
       fetch('../assets/zoom.js').then(r => r.text())
     ]);
@@ -502,7 +509,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${esc(data.title)}</title>
 <style>${baseCss}
-${readerCss}</style></head>
+${readerCss}
+${zoomCss}</style></head>
 <body>
 <header class="top"><h1 id="title"></h1>
 <button class="modebtn tap" id="modebtn" type="button">☰ 长文</button></header>
@@ -772,8 +780,18 @@ ${readerCss}</style></head>
   const isDirty = () => snapshot() !== clean;
 
   /** 离开：三个明确的出口，不用原生 confirm（它只有两个键，说不清） */
+  /** url 传 null ＝ 回到来的那一页（同源才算），否则去指定地址 */
+  function go(url) {
+    if (url) { location.href = url; return; }
+    const ref = document.referrer;
+    const sameSite = ref && new URL(ref).origin === location.origin
+                         && new URL(ref).pathname !== location.pathname;
+    if (sameSite && history.length > 1) history.back();
+    else location.href = '../';
+  }
+
   function leaveTo(url) {
-    if (!isDirty()) { location.href = url; return; }      // 没动过，直接走
+    if (!isDirty()) { go(url); return; }                  // 没动过，直接走
     const dlg = $('#dlg-leave');
     const editing = !!draft.id;
     $('#lv-title').textContent = editing ? '放弃这次修改？' : '离开？';
@@ -782,8 +800,8 @@ ${readerCss}</style></head>
       : '这份草稿还没发布。';
     $('#lv-save').textContent = editing ? '存成草稿，下次接着改' : '保存草稿，下次接着写';
     $('#lv-drop').textContent = editing ? '放弃修改，直接离开' : '不保存，直接离开';
-    $('#lv-save').onclick = async () => { await saveNow(); location.href = url; };
-    $('#lv-drop').onclick = async () => { await Store.clear(); location.href = url; };
+    $('#lv-save').onclick = async () => { await saveNow(); go(url); };
+    $('#lv-drop').onclick = async () => { await Store.clear(); go(url); };
     $('#lv-stay').onclick = () => dlg.close();
     dlg.showModal();
   }
@@ -905,7 +923,10 @@ ${readerCss}</style></head>
     $('#btn-preview').onclick = openPreview;
     $('#pv-close').onclick = () => { $('#pvframe').srcdoc = ''; $('#dlg-preview').close(); };
     $('#btn-save').onclick = saveNow;
-    $('#btn-back').onclick = () => leaveTo('../mine/');
+    // 返回＝回到你来的那个页面，不再一律跳教程库。
+    // 同源的上一页才走 history.back()，否则（直接打开链接、从外站进来）回首页
+    $('#btn-back').onclick = () => leaveTo(null);
+    $('#btn-home2').onclick = () => leaveTo('../');
     $('#btn-export').onclick = exportOne;
     $('#btn-discard').onclick = discardDraft;
     $('#btn-mine').onclick = () => { $('#dlg-settings').close(); leaveTo('../mine/'); };

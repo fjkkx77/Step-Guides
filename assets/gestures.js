@@ -130,12 +130,12 @@
 
     const cancelHold = () => { clearTimeout(timer); timer = 0; };
 
-    function begin(el, y) {
+    function begin(el, y, id) {
       const items = [...o.root().querySelectorAll(o.item)];
       st = {
-        el, from: items.indexOf(el), y0: y, dy: 0,
+        el, from: items.indexOf(el), y0: y, dy: 0, id,
         h: el.getBoundingClientRect().height,
-        scrollTimer: 0
+        lastScroll: scrollY
       };
       el.classList.add('lpd-drag');
       document.body.classList.add('lpd-on');
@@ -175,7 +175,7 @@
       else if (clientY > vh - EDGE) d = (clientY - (vh - EDGE)) / 4;
       if (!d) return;
       scrollBy(0, d);
-      st.y0 -= d;                    // 页面滚了，基准跟着走，卡片才继续贴着手指
+      // 补偿交给上面的 scroll 监听统一做，这里只管触发滚动，避免补两次
     }
 
     document.addEventListener('touchstart', e => {
@@ -187,28 +187,54 @@
       if (!onHandle && t.closest('button, input, textarea, a, .lsw-acts')) return;
       const el = t.closest(o.item);
       if (!el || !o.root().contains(el)) return;
-      const y = e.touches[0].clientY, x = e.touches[0].clientX;
+      const t0 = e.touches[0];
+      const y = t0.clientY, x = t0.clientX, id = t0.identifier;
       // 抓手上按住＝明确表达了"我要拖"，不用等满 450ms；别处按住才需要长按确认
-      timer = setTimeout(() => { timer = 0; begin(el, y); }, onHandle ? 90 : HOLD);
+      timer = setTimeout(() => { timer = 0; begin(el, y, id); }, onHandle ? 90 : HOLD);
       st = st || null;
       document._lpdStart = { x, y };
     }, { passive: true });
 
+    /** 在所有触点里找出正在拖的那一根 */
+    const mine = touches => {
+      for (const t of touches) if (t.identifier === st.id) return t;
+      return null;
+    };
+
     document.addEventListener('touchmove', e => {
-      const t = e.touches[0];
-      if (!t) return;
       if (timer && document._lpdStart) {
+        const t = e.touches[0];
+        if (!t) return;
         const d = Math.hypot(t.clientX - document._lpdStart.x, t.clientY - document._lpdStart.y);
         if (d > DEAD) cancelHold();                 // 还没按满就动了 = 想滚动，不是想拖
         return;
       }
       if (!st) return;
-      e.preventDefault();                            // 拖起来之后页面别再跟着滚
+      const t = mine(e.touches);
+      if (!t) return;                                // 动的是别的手指，交给浏览器（就是下面那条）
+
+      // 只有单指时才拦截。两根手指在屏幕上时放行，让另一根手指照常滚页面——
+      // 步骤多的时候，一只手按着卡片、另一只手滚到目标位置，比等自动滚快得多
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        autoScroll(t.clientY);                       // 单指时才需要靠边缘自动滚
+      }
       st.dy = t.clientY - st.y0;
       apply();
       shuffle(t.clientY);
-      autoScroll(t.clientY);
     }, { passive: false });
+
+    /* 页面被另一根手指滚动时，卡片的静态位置跟着变了。
+       把基准同量补偿回去，卡片才继续贴在手指下面而不是跟着页面跑 */
+    addEventListener('scroll', () => {
+      if (!st) return;
+      const d = scrollY - st.lastScroll;
+      st.lastScroll = scrollY;
+      if (!d) return;
+      st.y0 -= d;
+      st.dy += d;
+      apply();
+    }, { passive: true });
 
     function drop(cancel) {
       cancelHold();
@@ -224,8 +250,14 @@
       if (!cancel && to >= 0 && to !== from) o.onDrop(from, to);
       else o.onDrop(from, from);                     // 顺序没变也要重绘一次，清掉行内样式
     }
-    document.addEventListener('touchend', () => drop(false), { passive: true });
-    document.addEventListener('touchcancel', () => drop(true), { passive: true });
+    const ended = e => {
+      if (!st) { cancelHold(); return false; }
+      for (const t of e.changedTouches) if (t.identifier === st.id) return true;
+      return false;                      // 抬起的是另一根手指（刚才在滚页面），拖动继续
+    };
+    document.addEventListener('touchend', e => { if (ended(e)) drop(false); else cancelHold(); },
+                              { passive: true });
+    document.addEventListener('touchcancel', e => { if (ended(e)) drop(true); }, { passive: true });
 
     return { cancelHold, active: () => !!st };
   }

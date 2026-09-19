@@ -55,10 +55,12 @@ const SEED = `(async () => {
     box: !!document.getElementById('swap-paste')
   })`));
   chk('换图弹层打开', sw.open === true, sw.title);
-  chk('换图三条路都在（选文件/剪贴板/粘贴框）', sw.filePick && sw.clip && sw.box);
+  chk('换图有「选文件」和「粘贴剪贴板」两个键', sw.filePick && sw.clip);
+  chk('换图弹层里平时看不到粘贴框', (await c.ev(`document.getElementById('swap-paste').hidden`)) === true);
 
   // 用粘贴换图：往粘贴框里派发一个带文件的 paste
   const swapped = await c.ev(`(async () => {
+    document.getElementById('swap-paste').hidden = false;   // 模拟"读不到剪贴板"时的兜底路径
     const before = window.SGWriter.draft.steps[0].key + '|' + window.SGWriter.draft.steps[0].w;
     const b = await fetch('../t/qhftq5kz/i/09.webp').then(r => r.blob());
     const dt = new DataTransfer();
@@ -95,6 +97,30 @@ const SEED = `(async () => {
   chk('预览里标题正确', pv.title === '预览测试', pv.title);
   chk('预览里图片真的显示出来了', pv.imgOk === true);
   chk('预览上明确写着「还没发布」', pv.notPublished === true);
+  // 预览里点图放大：必须和正式页面长得一样（漏内联 zoom.css 时这里会退化成小白框）
+  const pvZoom = JSON.parse(await c.ev(`(async () => {
+    const d = document.getElementById('pvframe').contentDocument;
+    d.querySelector('.page img').click();
+    await new Promise(r => setTimeout(r, 700));
+    const dlg = d.getElementById('zoom');
+    const cs = dlg ? getComputedStyle(dlg) : null;
+    const close = d.querySelector('#zoom .zclose');
+    const cr = close ? close.getBoundingClientRect() : null;
+    return JSON.stringify({
+      open: !!(dlg && dlg.open),
+      bg: cs ? cs.backgroundColor : '',
+      fullW: cs ? Math.round(parseFloat(cs.width)) : 0,
+      closeH: cr ? Math.round(cr.height) : 0,
+      closeBg: close ? getComputedStyle(close).backgroundColor : ''
+    });
+  })()`));
+  chk('预览里点图能放大', pvZoom.open === true);
+  chk('预览里的放大器样式完整（zoom.css 已内联）',
+      /rgba\(12, 12, 14/.test(pvZoom.bg) && pvZoom.closeH >= 44,
+      `底色 ${pvZoom.bg} / 关闭键高 ${pvZoom.closeH} 底色 ${pvZoom.closeBg}`);
+  await c.ev(`document.getElementById('pvframe').contentDocument.querySelector('#zoom .zclose').click()`);
+  await sleep(200);
+
   await c.ev(`document.getElementById('pv-close').click()`);
   await sleep(200);
   chk('能关掉预览', (await c.ev(`document.getElementById('dlg-preview').open`)) === false);
@@ -108,13 +134,38 @@ const SEED = `(async () => {
   })`));
   chk('点保存有看得见的回执', tag.hidden === false && /已保存/.test(tag.text), tag.text);
 
-  // ⑤ 离开的逻辑：没改动就别拦人
+  // ⑤ 返回键要回到「来的那一页」，不是一律跳教程库
+  await c.goto(`http://127.0.0.1:${PORT}/`);
+  await sleep(500);
+  await c.ev(`document.querySelector('a[href="w/"]').click()`);
+  await sleep(900);
+  chk('从首页点进写作页', /\/w\//.test(await c.ev(`location.pathname`)));
+  await c.ev(`document.getElementById('btn-back').click()`);
+  await sleep(900);
+  const backTo = await c.ev(`location.pathname`);
+  chk('从首页进来的，返回回首页（不是教程库）', backTo === '/' || /\/index\.html$/.test(backTo), '落在 ' + backTo);
+
+  await c.goto(`http://127.0.0.1:${PORT}/mine/`);
+  await sleep(500);
+  await c.ev(`document.getElementById('btn-new').click()`);
+  await sleep(900);
+  await c.ev(`document.getElementById('btn-back').click()`);
+  await sleep(900);
+  chk('从教程库进来的，返回回教程库', /\/mine\//.test(await c.ev(`location.pathname`)),
+      '落在 ' + await c.ev(`location.pathname`));
+
+  await c.goto(`http://127.0.0.1:${PORT}/w/`);
+  await sleep(600);
+  chk('顶栏另有一个主页键', await c.ev(`!!document.getElementById('btn-home2')`));
+
+  // ⑥ 离开的逻辑：没改动就别拦人
   await c.goto(`http://127.0.0.1:${PORT}/w/`);
   await sleep(700);
   await c.ev(`document.getElementById('btn-back').click()`);
   await sleep(900);
   const wentStraight = await c.ev(`location.pathname`);
-  chk('什么都没改时，点返回直接走（不弹任何东西）', /\/mine\//.test(wentStraight), '落在 ' + wentStraight);
+  // 判据是"离开了写作页"，不是"落在某个固定页面"——落在哪由来源决定
+  chk('什么都没改时，点返回直接走（不弹任何东西）', !/\/w\//.test(wentStraight), '落在 ' + wentStraight);
 
   await c.goto(`http://127.0.0.1:${PORT}/w/`);
   await sleep(700);
@@ -136,7 +187,8 @@ const SEED = `(async () => {
 
   await c.ev(`document.getElementById('lv-drop').click()`);
   await sleep(1000);
-  chk('选「不保存直接离开」真的走了', /\/mine\//.test(await c.ev(`location.pathname`)));
+  chk('选「不保存直接离开」真的走了', !/\/w\//.test(await c.ev(`location.pathname`)),
+      '落在 ' + await c.ev(`location.pathname`));
 
   await c.goto(`http://127.0.0.1:${PORT}/w/`);
   await sleep(1000);

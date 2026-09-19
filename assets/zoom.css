@@ -31,21 +31,26 @@ dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
   display:flex;align-items:center;justify-content:flex-end;gap:8px;
   padding:0 12px;
 }
+/* 工具栏上的东西一律用「实色底」，不能用半透明白 ——
+   图片放大后占满整屏，背后经常是浅色截图，半透明白字直接看不见（踩过两次） */
 #zoom .zpct{
   margin-right:auto;height:36px;padding:0 12px;border-radius:18px;
-  background:rgba(255,255,255,.16);color:#fff;font-size:14px;
+  background:rgba(20,20,22,.78);color:#fff;font-size:14px;font-weight:600;
   display:flex;align-items:center;
+  box-shadow:0 1px 6px rgba(0,0,0,.35);
 }
 #zoom .zreset,#zoom .zclose{
   height:var(--tap);padding:0 16px;border-radius:22px;
   font-size:16px;font-weight:600;
   display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 10px rgba(0,0,0,.35);
 }
-#zoom .zreset{background:rgba(255,255,255,.18);color:#fff}
+#zoom .zreset{background:rgba(20,20,22,.82);color:#fff;border:1px solid rgba(255,255,255,.35)}
 #zoom .zclose{background:#fff;color:#111}
 #zoom .ztip{
-  position:fixed;left:0;right:0;
+  position:fixed;left:50%;transform:translateX(-50%);
   bottom:calc(12px + env(safe-area-inset-bottom));
-  text-align:center;color:rgba(255,255,255,.72);font-size:13px;
-  pointer-events:none;
+  max-width:92vw;padding:6px 14px;border-radius:16px;
+  background:rgba(20,20,22,.7);color:#fff;font-size:13px;
+  text-align:center;pointer-events:none;
 }

@@ -122,7 +122,56 @@ const order = `JSON.stringify(window.SGWriter.draft.steps.map(s => s.text))`;
   chk('步数没变（只是换了位置）', now.length === before.length, now.length + ' 步');
   chk('拖完清掉了行内样式', (await c.ev(`[...document.querySelectorAll('.step')].every(s => !s.style.transform)`)) === true);
 
-  // ── ⑤ 短按不该触发拖拽 ──
+  // ── ⑤ 拖着的时候，另一根手指滚页面：拖动不能中断 ──
+  await c.ev(`scrollTo(0, 0)`);
+  await sleep(300);
+  const g2 = JSON.parse(await c.ev(`(() => {
+    const el = document.querySelectorAll('.step')[0];
+    const h = el.querySelector('.handle').getBoundingClientRect();
+    return JSON.stringify({ x: Math.round(h.left + h.width / 2), y: Math.round(h.top + h.height / 2) });
+  })()`));
+  const T = (type, pts) => c.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+  const P1 = y => ({ x: g2.x, y, id: 1 });
+  const P2 = y => ({ x: 300, y, id: 2 });
+
+  await T('touchStart', [P1(g2.y)]);
+  await sleep(300);
+  const started = await c.ev(`!!document.querySelector('.lpd-drag')`);
+  chk('（多指）先单指把卡片拖起来', started === true);
+
+  // 第二根手指按下并往上滑 = 滚页面
+  await T('touchStart', [P1(g2.y), P2(600)]);
+  for (let y = 600; y >= 400; y -= 40) await T('touchMove', [P1(g2.y), P2(y)]);
+  await sleep(200);
+  const during = JSON.parse(await c.ev(`JSON.stringify({
+    dragging: !!document.querySelector('.lpd-drag'),
+    scrolled: Math.round(scrollY)
+  })`));
+  chk('第二根手指滚页面时，拖动没被中断', during.dragging === true, '页面滚到 ' + during.scrolled);
+
+  // 抬起第二根手指，拖动应该还在
+  // （CDP 的 touchEnd 传的是"被抬起的那个点"，不是"剩下的点"——我一开始传反了）
+  await T('touchEnd', [P2(400)]);
+  await sleep(200);
+  chk('抬起第二根手指，拖动仍在继续', (await c.ev(`!!document.querySelector('.lpd-drag')`)) === true);
+
+  // 页面真滚起来时，卡片要补偿（合成触摸不会触发原生滚动，所以这里直接滚页面来验补偿逻辑）
+  const beforeT = await c.ev(`document.querySelector('.lpd-drag').style.transform`);
+  // 按「页面实际滚了多少」来比，不能写死 120：列表不够长时滚不满那么多（踩过）
+  const realScroll = +(await c.ev(`(() => { const a = scrollY; scrollBy(0, 120); return scrollY - a; })()`));
+  await sleep(250);
+  const afterT = await c.ev(`document.querySelector('.lpd-drag') ? document.querySelector('.lpd-drag').style.transform : ''`);
+  const num = t => parseFloat((/translate3d\(0(?:px)?,\s*(-?[\d.]+)px/.exec(t) || [0, 0])[1]);
+  chk('页面滚动时卡片跟着补偿（不会跟着页面跑掉）',
+      realScroll > 0 && Math.abs(num(afterT) - num(beforeT) - realScroll) < 2,
+      `页面滚了 ${realScroll}px，卡片补了 ${(num(afterT) - num(beforeT)).toFixed(0)}px`);
+
+  // 抬起拖拽那根，才算放下
+  await T('touchEnd', []);
+  await sleep(400);
+  chk('抬起拖拽的那根手指才落位', (await c.ev(`!document.querySelector('.lpd-drag')`)) === true);
+
+  // ── ⑥ 短按不该触发拖拽 ──
   r = await rect(1);
   await touch('touchStart', r.x, r.y);
   await sleep(150);
