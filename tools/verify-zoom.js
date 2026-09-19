@@ -2,6 +2,8 @@
 const { open, sleep } = require('./cdp.js');
 const PORT = 8879;
 const PAGE = process.argv[2] || 't/qhftq5kz/';
+// --base=https://…/ 可以直接验线上（老教程能不能自动用上新放大器，只有线上说了算）
+const BASE = (process.argv.find(a => a.startsWith('--base=')) || '').split('=').slice(1).join('=');
 
 const scaleOf = `(() => {
   const t = getComputedStyle(document.getElementById('zoomimg')).transform;
@@ -11,7 +13,7 @@ const scaleOf = `(() => {
 
 (async () => {
   const c = await open(1280, 800, 1);
-  await c.goto(`http://127.0.0.1:${PORT}/${PAGE}`);
+  await c.goto(BASE ? BASE.replace(/\/$/, '') + '/' + PAGE : `http://127.0.0.1:${PORT}/${PAGE}`);
   for (let i = 0; i < 30; i++) { await sleep(200); if (await c.ev(`!!document.querySelector('.page img')`)) break; }
 
   let bad = 0;
