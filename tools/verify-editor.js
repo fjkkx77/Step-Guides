@@ -108,6 +108,40 @@ const SEED = `(async () => {
   })`));
   chk('点保存有看得见的回执', tag.hidden === false && /已保存/.test(tag.text), tag.text);
 
+  // ⑤ 离开的逻辑：没改动就别拦人
+  await c.goto(`http://127.0.0.1:${PORT}/w/`);
+  await sleep(700);
+  await c.ev(`document.getElementById('btn-back').click()`);
+  await sleep(900);
+  const wentStraight = await c.ev(`location.pathname`);
+  chk('什么都没改时，点返回直接走（不弹任何东西）', /\/mine\//.test(wentStraight), '落在 ' + wentStraight);
+
+  await c.goto(`http://127.0.0.1:${PORT}/w/`);
+  await sleep(700);
+  await c.ev(`(() => { const t = document.getElementById('title');
+    t.value = '改了点东西'; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(300);
+  await c.ev(`document.getElementById('btn-back').click()`);
+  await sleep(500);
+  const lv = JSON.parse(await c.ev(`JSON.stringify({
+    open: document.getElementById('dlg-leave').open,
+    path: location.pathname,
+    save: document.getElementById('lv-save').textContent.trim(),
+    drop: document.getElementById('lv-drop').textContent.trim(),
+    stay: document.getElementById('lv-stay').textContent.trim()
+  })`));
+  chk('改过东西时，点返回弹三选一', lv.open === true && /\/w\//.test(lv.path),
+      `${lv.save} / ${lv.drop} / ${lv.stay}`);
+  chk('三个出口都说人话', /保存/.test(lv.save) && /不保存|放弃/.test(lv.drop) && /留下/.test(lv.stay));
+
+  await c.ev(`document.getElementById('lv-drop').click()`);
+  await sleep(1000);
+  chk('选「不保存直接离开」真的走了', /\/mine\//.test(await c.ev(`location.pathname`)));
+
+  await c.goto(`http://127.0.0.1:${PORT}/w/`);
+  await sleep(1000);
+  chk('丢弃后不会再被问「要不要接着上次的」', (await c.ev(`window.SGWriter.draft.steps.length`)) === 0);
+
   await c.close();
   console.log(bad ? `\n共 ${bad} 条未通过` : '\n全部通过');
   process.exit(bad ? 1 : 0);

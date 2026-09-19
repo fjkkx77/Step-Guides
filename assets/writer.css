@@ -31,17 +31,25 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .step.drag-over{outline:2px dashed var(--brand);outline-offset:2px}
 .step.dragging{opacity:.45}
 .step .thumb{
-  grid-row:span 2;
+  grid-row:1;
   width:76px;height:118px;border-radius:10px;overflow:hidden;
   background:var(--shot-bg);border:1px solid var(--line);
   display:flex;align-items:center;justify-content:center;position:relative;
 }
 .step .thumb img{width:100%;height:100%;object-fit:contain}
+/* 序号徽标本身只有 24px，但点它＝「移到第几步」，所以热区撑到 44：
+   外层是 44×44 的透明按钮，里面才是那个小圆点（视觉不变，手指够得着） */
 .step .no{
-  position:absolute;left:4px;top:4px;
-  min-width:22px;height:22px;padding:0 6px;border-radius:11px;
-  background:var(--brand);color:#fff;font-size:13px;font-weight:600;
+  position:absolute;left:0;top:0;
+  width:44px;height:44px;padding:0;border:0;background:none;
+  display:flex;align-items:flex-start;justify-content:flex-start;
+  z-index:2;
+}
+.step .no i{
+  min-width:24px;height:24px;margin:4px 0 0 4px;padding:0 6px;border-radius:12px;
+  background:var(--brand);color:#fff;font-size:13px;font-weight:600;font-style:normal;
   display:flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
 }
 .step .fields{display:flex;flex-direction:column;gap:6px;min-width:0}
 .step .fields input,
@@ -53,23 +61,31 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 }
 .step .fields input{height:40px;font-weight:600}
 .step .fields textarea{resize:none;line-height:1.6;overflow:hidden;min-height:76px}
+/* 操作行独占整行：挤在缩略图右侧那一列只有 ~192px，
+   五个控件（抓手/上/下/换图/删除）放不下，320 档实测溢出到 395px */
 .step .ops{
-  grid-column:2;display:flex;flex-wrap:wrap;gap:6px;
+  grid-column:1 / -1;display:flex;gap:6px;align-items:center;
 }
 .step .ops button{
-  height:44px;min-width:44px;padding:0 12px;border-radius:10px;
+  height:44px;border-radius:10px;
   background:var(--bg);border:1px solid var(--line);color:var(--ink2);font-size:14px;
+  display:flex;align-items:center;justify-content:center;gap:3px;
+  white-space:nowrap;padding:0 10px;
 }
-.step .ops button.danger{color:#c1121f}
-.handle{display:none}
-/* 电脑上（有精确指针）才给拖拽把手；手机上拖拽多图排序落点难控，用按钮 */
-@media (pointer:fine){
-  .handle{
-    display:flex;align-items:center;justify-content:center;
-    height:44px;width:44px;border-radius:10px;cursor:grab;
-    background:var(--bg);border:1px solid var(--line);color:var(--muted);
-  }
+.step .ops button.icon{width:44px;padding:0;flex:0 0 44px}
+.step .ops button.grow{flex:1 1 0;min-width:0;padding:0 6px;overflow:hidden}
+.step .ops button.danger{color:#b0271e}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .step .ops button.danger{color:#ff8a80} }
+/* 把手两端都显示：电脑上是 HTML5 拖拽，手机上是「按住它拖」的抓手。
+   手机上没有可见抓手时，用户根本不知道能拖（用户反馈过） */
+.handle{
+  display:flex;align-items:center;justify-content:center;
+  height:44px;width:44px;flex:0 0 44px;border-radius:10px;
+  background:var(--bg);border:1px solid var(--line);color:var(--muted);
+  cursor:grab;touch-action:none;          /* 在把手上按住就别让页面滚 */
+  font-size:18px;line-height:1;
 }
+@media (pointer:fine){ .handle{cursor:grab} }
 
 /* ── 添加区 ─────────────────────────────────────────── */
 .addzone{
@@ -80,9 +96,11 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .addzone b{display:block;color:var(--brand);font-size:16px;margin-bottom:2px}
 .addbtn{
   display:inline-flex;align-items:center;justify-content:center;
-  height:var(--tap);padding:0 20px;border-radius:12px;margin-top:8px;
+  height:var(--tap);padding:0 18px;border-radius:12px;
   background:var(--brand);color:#fff;font-size:16px;font-weight:600;
+  border:1px solid transparent;white-space:nowrap;
 }
+.addbtn.ghost{background:var(--card);color:var(--ink);border-color:var(--line);font-weight:400}
 .empty{padding:26px 16px;text-align:center;color:var(--muted);line-height:1.8}
 
 /* ── 底栏 ───────────────────────────────────────────── */
@@ -172,7 +190,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 /* ── 手机端粘贴入口 ─────────────────────────────────
    手机上没有 Ctrl+V，必须给一个"能长按的东西"才唤得出系统的「粘贴」菜单 */
-.addrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+.addrow{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:10px}
 .addbtn2{
   display:inline-flex;align-items:center;justify-content:center;
   height:var(--tap);padding:0 18px;border-radius:12px;
@@ -246,3 +264,36 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   background:var(--bg);border:1px solid var(--line);color:var(--ink);font-size:15px;
 }
 #pvframe{flex:1;min-height:0;width:100%;border:0;background:var(--bg)}
+
+
+/* ── 左滑删除（配方 references/组件_iOS手势，参数未改） ───────── */
+:root{ --lsw-del-bg:rgba(224,72,61,.12); --lsw-del-fg:#b0271e; }
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --lsw-del-bg:rgba(224,72,61,.2); --lsw-del-fg:#ff8a80; }}
+.step{touch-action:pan-y pinch-zoom}        /* 横向手势归组件，纵向照常滚 */
+.lsw-anim{transition:transform .3s cubic-bezier(.2,.9,.3,1) !important}
+.lsw-acts{position:absolute;display:flex;gap:8px;pointer-events:none}
+.lsw-acts.is-open{pointer-events:auto}
+.lsw-btn{
+  width:clamp(68px,19vw,80px);height:100%;border:0;padding:0;border-radius:var(--radius);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  font-size:14px;font-weight:700;line-height:1.2;
+}
+.lsw-ico{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.lsw-del{background:var(--lsw-del-bg);color:var(--lsw-del-fg)}
+.lsw-btn:active{filter:brightness(.94)}
+
+/* ── 长按拖动排序 ─────────────────────────────────── */
+.lpd-drag{
+  position:relative;z-index:40;
+  box-shadow:0 10px 26px rgba(0,0,0,.22);
+  transform-origin:center;
+  opacity:.97;
+}
+body.lpd-on{user-select:none;-webkit-user-select:none}
+body.lpd-on .step:not(.lpd-drag){transition:transform .18s ease}
+
+/* 删除确认里的实色按钮（这是破坏性操作，要显眼） */
+.row button.danger-solid{background:#c1121f;color:#fff;border-color:transparent;font-weight:600}
+@media (prefers-reduced-motion: reduce){ .lsw-anim{transition:none !important} }

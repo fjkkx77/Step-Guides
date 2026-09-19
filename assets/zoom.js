@@ -57,7 +57,11 @@
       zoomAt(e.clientX, e.clientY, scale > 1.01 ? 1 : DBL);
     });
 
+    // 点空白处关闭：只认"没拖动过"的那一下，否则放大后拖到图外松手会误关
+    let downAt = null, moved = 0;
+
     box.addEventListener('pointerdown', e => {
+      if (pts.size === 0) { downAt = { x: e.clientX, y: e.clientY, t: Date.now() }; moved = 0; }
       box.setPointerCapture(e.pointerId);
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pts.size === 2) {
@@ -86,11 +90,18 @@
         if (startDist > 0) zoomAt(startMid.x, startMid.y, startScale * (d / startDist));
         return;
       }
+      if (downAt) moved = Math.max(moved, Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y));
       if (scale > 1.01) {                 // 只有放大了才拖动，否则会误触
         tx += e.clientX - prev.x;
         ty += e.clientY - prev.y;
         clamp(); apply();
       }
+    });
+
+    box.addEventListener('click', e => {
+      // 点在图片上不关（那是双击放大的地盘）；拖过 6px 也不关
+      if (e.target === img || moved > 6) return;
+      dlg.close();
     });
 
     const up = e => {

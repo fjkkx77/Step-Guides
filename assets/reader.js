@@ -181,7 +181,20 @@
     return dlg;
   }
 
+  /** 样式也要按需注入：老教程的壳子里既没有 zoom.js 也没有 zoom.css，
+      少了样式的话弹层会退化成浏览器默认的小白框（写作页就这么翻过车） */
+  function ensureZoomCss() {
+    if (!ASSETS) return;                                  // 导出/预览：样式已经内联了
+    if (document.querySelector('link[data-sg-zoom]')) return;
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = ASSETS + 'zoom.css';
+    l.dataset.sgZoom = '1';
+    document.head.appendChild(l);
+  }
+
   async function openZoom(src, alt) {
+    ensureZoomCss();
     const dlg = upgradeZoomDom();
     if (!zoomer) {
       if (!window.SGZoom) await loadOnce(ASSETS + 'zoom.js');

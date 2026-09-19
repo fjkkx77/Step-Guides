@@ -127,54 +127,6 @@ html[data-mode="long"] .say{
 html[data-mode="long"] .bottom,
 html[data-mode="long"] .topbar-progress{display:none}
 
-/* ── 放大层 ─────────────────────────────────────────── */
-dialog#zoom{
-  border:0;padding:0;margin:0;width:100vw;height:100dvh;max-width:100vw;max-height:100dvh;
-  background:rgba(12,12,14,.96);overflow:hidden;
-}
-dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
-#zoom .box{
-  width:100%;height:100%;
-  display:flex;align-items:center;justify-content:center;
-  overflow:hidden;
-  touch-action:none;            /* 手势全部自己处理，别让浏览器抢去做页面缩放 */
-  cursor:zoom-in;
-}
-#zoom .box.zoomed{cursor:grab}
-#zoom .box.zoomed:active{cursor:grabbing}
-#zoom img{
-  max-width:100%;max-height:100%;
-  background:#fff;border-radius:8px;
-  transform-origin:center center;
-  will-change:transform;
-  user-select:none;-webkit-user-drag:none;
-}
-/* 工具栏：白底深字，压在深色蒙版上，怎么都看得清（旧版是半透明白圈，看不清） */
-#zoom .zbar{
-  position:fixed;left:0;right:0;
-  top:calc(8px + env(safe-area-inset-top));
-  display:flex;align-items:center;justify-content:flex-end;gap:8px;
-  padding:0 12px;
-}
-#zoom .zpct{
-  margin-right:auto;height:36px;padding:0 12px;border-radius:18px;
-  background:rgba(255,255,255,.16);color:#fff;font-size:14px;
-  display:flex;align-items:center;
-}
-#zoom .zreset,#zoom .zclose{
-  height:var(--tap);padding:0 16px;border-radius:22px;
-  font-size:16px;font-weight:600;
-  display:flex;align-items:center;justify-content:center;
-}
-#zoom .zreset{background:rgba(255,255,255,.18);color:#fff}
-#zoom .zclose{background:#fff;color:#111}
-#zoom .ztip{
-  position:fixed;left:0;right:0;
-  bottom:calc(12px + env(safe-area-inset-bottom));
-  text-align:center;color:rgba(255,255,255,.72);font-size:13px;
-  pointer-events:none;
-}
-
 /* 矮屏：把顶栏进度行、内外边距收紧，省下来的高度全给截图。
    断点卡在 700px 而不是某台具体设备（活参数原则） */
 @media (max-height:700px){

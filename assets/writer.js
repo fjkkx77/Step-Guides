@@ -74,20 +74,23 @@
       card.className = 'step';
       card.dataset.i = i;
       card.innerHTML = `
-        <div class="thumb"><span class="no">${i + 1}</span><img alt=""></div>
+        <div class="thumb"><img alt=""></div>
+        <button class="no tap" type="button" data-op="to" aria-label="移到第几步"><i>${i + 1}</i></button>
         <div class="fields">
           <input class="stitle" type="text" placeholder="这一步做什么（可不填）" autocomplete="off">
           <textarea class="stext" rows="3" placeholder="跟她说清楚这一步要点哪里、注意什么"></textarea>
         </div>
         <div class="ops">
-          <div class="handle" title="拖动排序" draggable="true">⠿</div>
-          <button type="button" data-op="up" aria-label="上移">↑</button>
-          <button type="button" data-op="down" aria-label="下移">↓</button>
-          <button type="button" data-op="more" aria-label="更多">⋯</button>
+          <div class="handle" title="按住拖动排序" draggable="true">⠿</div>
+          <button class="icon" type="button" data-op="up" aria-label="上移">↑</button>
+          <button class="icon" type="button" data-op="down" aria-label="下移">↓</button>
+          <button class="grow" type="button" data-op="swap">🖼 换图</button>
+          <button class="grow danger" type="button" data-op="del">🗑 删除</button>
         </div>`;
       const th = card.querySelector('.thumb');
       th.querySelector('img').src = s.url;
       th.addEventListener('click', () => openZoom(s.url, `第 ${i + 1} 步的图`));
+      card.style.position = 'relative';          // 序号按钮压在缩略图左上角
       card.querySelector('.stitle').value = s.title || '';
       const ta = card.querySelector('.stext');
       ta.value = s.text || '';
@@ -95,6 +98,48 @@
       return card;
     }));
     $('#addhint').textContent = `已有 ${draft.steps.length} 步，还可以继续加`;
+    swipe && swipe.forget();     // 列表整块重建了，别再拿着旧节点
+  }
+
+  /* ── 手机手势：左滑删除 + 长按拖动排序 ──────────────
+     分工按配方的仲裁表：横向出死区归左滑（并取消长按计时），
+     原地按住 450ms 归拖拽，纵向谁都不接。 */
+  let swipe = null, drag = null;
+  const anyDialogOpen = () => !!document.querySelector('dialog[open]');
+
+  function initGestures() {
+    if (!matchMedia('(pointer: coarse)').matches) return;   // 电脑上用拖拽把手，不装手势
+    if (!window.SGGestures) return;
+    const ICO_DEL = '<svg class="lsw-ico" viewBox="0 0 24 24" aria-hidden="true">' +
+      '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>' +
+      '<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+    swipe = window.SGGestures.SwipeActions({
+      root: () => $('#list'),
+      item: '.step',
+      blocked: anyDialogOpen,
+      onLock: () => drag && drag.cancelHold(),        // 一横滑就别再等长按
+      actions: el => [{
+        label: '删除', cls: 'lsw-del', icon: ICO_DEL,
+        onClick: node => { swipe.close(true); del(+node.dataset.i); }
+      }]
+    });
+
+    drag = window.SGGestures.LongPressDrag({
+      root: () => $('#list'),
+      item: '.step',
+      handle: '.handle',          // 抓手上按住就能拖；卡片空白处/缩略图上要长按 450ms
+      blocked: () => anyDialogOpen() || (swipe && swipe.isOpen()),   // 有条目滑开着时不起拖拽
+      onDrop: (from, to) => {
+        if (from !== to && from >= 0) {
+          const [it] = draft.steps.splice(from, 1);
+          draft.steps.splice(to, 0, it);
+          save();
+        }
+        swipe && swipe.forget();
+        render();
+      }
+    });
   }
 
   function autoGrow(ta) {
@@ -138,11 +183,12 @@
     render(); save();
   }
 
-  /** ⋯ 浮层：手机上「移到第几步」用点的，不用 prompt 打字 */
-  function openMore(i) {
+  /** 点序号 = 移到第几步（低频操作放在"点序号改序号"这个自然的位置上，
+      不占卡片上的按钮位；换图/删除那两个高频的已经提到一级了） */
+  function openMoveTo(i) {
     const n = draft.steps.length;
     const dlg = $('#dlg-more');
-    $('#m-title').textContent = `第 ${i + 1} 步`;
+    $('#m-title').textContent = `第 ${i + 1} 步 · 移到哪儿？`;
     $('#m-chips').innerHTML = Array.from({ length: n }, (_, k) =>
       `<button type="button" class="chip${k === i ? ' now' : ''}" data-to="${k}">${k + 1}</button>`).join('');
     $('#m-chips').onclick = e => {
@@ -151,17 +197,23 @@
       dlg.close();
       moveTo(i, +b.dataset.to);
     };
-    $('#m-swap').onclick = () => { dlg.close(); swap(i); };
-    $('#m-del').onclick = () => { dlg.close(); del(i); };
     $('#m-cancel').onclick = () => dlg.close();
     dlg.showModal();
   }
 
+  /** 删除：配方要求永远二次确认，且不用原生 confirm（自动化里会冻住，样式也不统一） */
   function del(i) {
-    if (!confirm(`删掉第 ${i + 1} 步？`)) return;
-    const [gone] = draft.steps.splice(i, 1);
-    if (gone.remote) draft.gone = [...(draft.gone || []), gone.remote];  // 线上那份也要删
-    render(); save();
+    const dlg = $('#dlg-del');
+    $('#del-title').textContent = `删除第 ${i + 1} 步？`;
+    $('#del-no').onclick = () => dlg.close();
+    $('#del-yes').onclick = () => {
+      dlg.close();
+      const [gone] = draft.steps.splice(i, 1);
+      if (gone && gone.remote) draft.gone = [...(draft.gone || []), gone.remote];  // 线上那份也要删
+      swipe && swipe.forget();
+      render(); save();
+    };
+    dlg.showModal();
   }
 
   /** 真正换掉第 i 步的图 */
@@ -215,10 +267,10 @@
   }
 
   /** 读剪贴板里的第一张图，读不到就返回 null（两处在用：加图、换图） */
-  async function readClipboardImage() {
+  async function readClipboardImage(opt = {}) {
+    const fail = msg => { if (!opt.quiet) alert(msg); return null; };
     if (!navigator.clipboard || !navigator.clipboard.read) {
-      alert('这个浏览器不支持直接读剪贴板，用下面的粘贴框（长按 → 粘贴）。');
-      return null;
+      return fail('这个浏览器不支持直接读剪贴板，用下面的粘贴框（长按 → 粘贴）。');
     }
     try {
       for (const it of await navigator.clipboard.read()) {
@@ -227,11 +279,10 @@
         const blob = await it.getType(type);
         return new File([blob], 'paste-' + Date.now() + '.' + type.split('/')[1], { type });
       }
-      alert('剪贴板里没有图片');
+      return fail('剪贴板里没有图片');
     } catch (e) {
-      alert('读剪贴板没成功：' + e.message + '。用下面的粘贴框（长按 → 粘贴）试试。');
+      return fail('读剪贴板没成功：' + e.message + '。用下面的粘贴框（长按 → 粘贴）试试。');
     }
-    return null;
   }
 
   /* ── 点缩略图放大看 ───────────────────────────────── */
@@ -290,6 +341,7 @@
     };
     $('#title').value = draft.title || '';
     render();
+    markClean();                 // 草稿本来就是存过的，恢复出来不算新改动
     return true;
   }
 
@@ -309,6 +361,7 @@
     };
     $('#title').value = draft.title;
     render();
+    markClean();                 // 刚载入＝没改动，这时点返回应该直接走
   }
 
   /* ── 发布 ─────────────────────────────────────────── */
@@ -388,6 +441,7 @@
 
       draft.id = id;
       await Store.clear();
+      markClean();                 // 已经发出去了，再点返回不该拦人
       progress(live ? '发布成功 🎉' : '已提交，但还没构建好',
                live ? '' : '仓库里已经有了，Pages 还在构建，过一会儿再打开这个链接', 100);
       const row = $('#p-row');
@@ -634,9 +688,13 @@ ${readerCss}</style></head>
      ① navigator.clipboard.read()（iOS Safari 会弹一个「粘贴」确认，安卓 Chrome 要权限）
      ② 一个可长按的框：长按 → 系统菜单「粘贴」→ 触发 paste 事件 */
   async function pasteFromClipboard() {
-    const f = await readClipboardImage();
-    if (f) await addFiles([f]);
-    else $('#pastebox').focus();
+    const f = await readClipboardImage({ quiet: true });
+    if (f) { await addFiles([f]); return; }
+    // 这条路走不通（浏览器不支持 / 用户拒绝 / 剪贴板里不是图），才亮出兜底的粘贴框
+    const box = $('#pastebox');
+    box.hidden = false;
+    box.focus();
+    $('#addhint').textContent = '读不到剪贴板 —— 在下面的框里长按，选「粘贴」';
   }
 
   /** 粘贴框：既接 paste 事件里的文件，也兜住「图片被直接塞进框里」的情况（iOS 有时这样） */
@@ -687,6 +745,7 @@ ${readerCss}</style></head>
       steps: draft.steps.map(st => ({ key: st.key, blob: st.blob || null, remote: st.remote || null,
                                       w: st.w, h: st.h, title: st.title, text: st.text }))
     });
+    markClean();
     const tag = $('#savetag');
     tag.hidden = false;
     tag.textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
@@ -703,14 +762,30 @@ ${readerCss}</style></head>
     $('#dlg-settings').close();
   }
 
-  /** 离开前问一句，别让人手滑点返回就丢了半小时的活 */
-  async function leaveTo(url) {
-    if (draft.steps.length || draft.title.trim()) {
-      const ans = confirm('离开这里？\n\n「确定」= 先保存草稿再走（下次回来还能接着写）\n「取消」= 留在这继续写');
-      if (!ans) return;
-      await saveNow();
-    }
-    location.href = url;
+  /* 有没有未保存的改动：没改过就别拦人，"只想点进来看看"是常态 */
+  let clean = '';
+  const snapshot = () => JSON.stringify({
+    t: draft.title,
+    s: draft.steps.map(x => [x.key, x.remote || '', x.title, x.text])
+  });
+  const markClean = () => { clean = snapshot(); };
+  const isDirty = () => snapshot() !== clean;
+
+  /** 离开：三个明确的出口，不用原生 confirm（它只有两个键，说不清） */
+  function leaveTo(url) {
+    if (!isDirty()) { location.href = url; return; }      // 没动过，直接走
+    const dlg = $('#dlg-leave');
+    const editing = !!draft.id;
+    $('#lv-title').textContent = editing ? '放弃这次修改？' : '离开？';
+    $('#lv-desc').textContent = editing
+      ? '这份教程已经发布过了。这里的修改还没发布，离开就没了 —— 除非先存成草稿。'
+      : '这份草稿还没发布。';
+    $('#lv-save').textContent = editing ? '存成草稿，下次接着改' : '保存草稿，下次接着写';
+    $('#lv-drop').textContent = editing ? '放弃修改，直接离开' : '不保存，直接离开';
+    $('#lv-save').onclick = async () => { await saveNow(); location.href = url; };
+    $('#lv-drop').onclick = async () => { await Store.clear(); location.href = url; };
+    $('#lv-stay').onclick = () => dlg.close();
+    dlg.showModal();
   }
 
   /* ── 设置 ─────────────────────────────────────────── */
@@ -729,6 +804,12 @@ ${readerCss}</style></head>
     $('#title').addEventListener('input', e => { draft.title = e.target.value; save(); });
 
     $('#pick').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+    $('#btn-pick').onclick = () => $('#pick').click();
+
+    // 出码是在电脑上点的、扫码是在手机上点的，各自只显示该显示的那个
+    const touch = matchMedia('(pointer: coarse)').matches;
+    $('#btn-qr').hidden = touch;
+    $('#btn-scan').hidden = !touch;
 
     // 粘贴（电脑上 PixPin 截完直接 Ctrl+V）
     addEventListener('paste', e => {
@@ -751,7 +832,8 @@ ${readerCss}</style></head>
       const btn = e.target.closest('button[data-op]');
       if (!btn) return;
       const i = +btn.closest('.step').dataset.i;
-      ({ up: () => move(i, -1), down: () => move(i, 1), more: () => openMore(i) })[btn.dataset.op]();
+      ({ up: () => move(i, -1), down: () => move(i, 1), to: () => openMoveTo(i),
+         swap: () => swap(i), del: () => del(i) })[btn.dataset.op]();
     });
     $('#list').addEventListener('input', e => {
       const card = e.target.closest('.step');
@@ -829,6 +911,8 @@ ${readerCss}</style></head>
     $('#btn-mine').onclick = () => { $('#dlg-settings').close(); leaveTo('../mine/'); };
     $('#btn-home').onclick = () => { $('#dlg-settings').close(); leaveTo('../'); };
 
+    initGestures();
+
     // 扫码进来的先处理导入（它只改设置，不碰草稿）
     importFromHash();
 
@@ -837,14 +921,16 @@ ${readerCss}</style></head>
     if (editId) {
       loadPublished(editId).catch(err => alert('这份教程读不出来：' + err.message));
     } else {
-      restore().then(has => { if (!has) render(); });
+      restore().then(has => { if (!has) { render(); markClean(); } });
     }
   }
 
   // 给验证脚本用的测试口（也方便自己在控制台里手动检查状态）
   window.SGWriter = { addFiles, render, b64url, unb64url, cfgToUrl, cfgFromUrl, askImport,
                       startScan, stopScan, ensureDecoder, openPreview, openZoom, swap,
-                      replaceImage, saveNow, buildReaderHtml, get draft() { return draft; } };
+                      replaceImage, saveNow, buildReaderHtml, del, move, moveTo,
+                      get swipe() { return swipe; }, get drag() { return drag; },
+                      get draft() { return draft; } };
 
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', boot) : boot();
 })();

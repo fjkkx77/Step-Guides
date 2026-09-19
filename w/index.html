@@ -9,6 +9,7 @@
 <title>写教程</title>
 <link rel="stylesheet" href="../assets/base.css">
 <link rel="stylesheet" href="../assets/writer.css">
+<link rel="stylesheet" href="../assets/zoom.css">
 </head>
 <body>
 
@@ -25,12 +26,13 @@
   <b>把截图放进来</b>
   <span id="addhint">从相册选，或粘贴、拖进来</span>
   <div class="addrow">
-    <label class="addbtn tap" for="pick">＋ 选择图片</label>
-    <button class="addbtn2 tap" id="btn-clip" type="button">📋 粘贴图片</button>
+    <button class="addbtn tap" id="btn-pick" type="button">＋ 选择图片</button>
+    <button class="addbtn tap ghost" id="btn-clip" type="button">📋 粘贴图片</button>
   </div>
   <input id="pick" type="file" accept="image/*" multiple hidden>
-  <div class="pastebox" id="pastebox" contenteditable="true" role="textbox"
-       aria-label="在这里长按然后选粘贴" data-ph="手机上：在这个框里长按 → 选「粘贴」"></div>
+  <!-- 平时收起来。只有"读剪贴板"这条路走不通时才亮出来当兜底 -->
+  <div class="pastebox" id="pastebox" contenteditable="true" role="textbox" hidden
+       aria-label="在这里长按然后选粘贴" data-ph="在这个框里长按 → 选「粘贴」"></div>
 </div>
 
 <footer class="wbottom">
@@ -59,8 +61,8 @@
       <button class="tap go" id="btn-save-set" type="button">保存</button>
     </div>
     <div class="row">
-      <button class="tap" id="btn-qr" type="button">📱 出码（在电脑上点）</button>
-      <button class="tap" id="btn-scan" type="button">📷 扫码（在手机上点）</button>
+      <button class="tap" id="btn-qr" type="button" hidden>📱 出码给手机扫</button>
+      <button class="tap" id="btn-scan" type="button" hidden>📷 扫码导入设置</button>
     </div>
     <hr class="sep">
     <div class="stack">
@@ -68,6 +70,31 @@
       <button class="tap" id="btn-home" type="button">🏠 回首页</button>
       <button class="tap" id="btn-export" type="button">⬇ 导出备份（单文件 HTML）</button>
       <button class="tap danger" id="btn-discard" type="button">🗑 丢弃这份草稿</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 删除确认：配方要求删除永远二次确认，且不能用原生 confirm -->
+<dialog id="dlg-del">
+  <div class="sheet">
+    <h2 id="del-title">删除这一步？</h2>
+    <p>删掉以后这一步的图和文字都没了，其它步骤会重新编号。</p>
+    <div class="row">
+      <button class="tap" id="del-no" type="button">取消</button>
+      <button class="tap danger-solid" id="del-yes" type="button">删除</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 离开时的三选一（原生 confirm 只有两个键，说不清楚） -->
+<dialog id="dlg-leave">
+  <div class="sheet">
+    <h2 id="lv-title">离开？</h2>
+    <p id="lv-desc"></p>
+    <div class="stack">
+      <button class="tap go" id="lv-save" type="button">保存草稿，下次接着写</button>
+      <button class="tap danger" id="lv-drop" type="button">不保存，直接离开</button>
+      <button class="tap" id="lv-stay" type="button">留下</button>
     </div>
   </div>
 </dialog>
@@ -169,6 +196,7 @@
 
 <script src="../assets/vendor/qrcode.js"></script>
 <script src="../assets/zoom.js"></script>
+<script src="../assets/gestures.js"></script>
 <script src="../assets/img.js"></script>
 <script src="../assets/github.js"></script>
 <script src="../assets/store.js"></script>
