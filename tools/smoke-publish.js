@@ -13,7 +13,11 @@ const OWNER = 'fjkkx77', REPO = 'Step-Guides';
   const c = await open(420, 900, 1);
   await c.goto(`http://127.0.0.1:${PORT}/tests/selftest.html`);   // 这页已经引了 github.js
 
-  const before = execSync(`gh api repos/${OWNER}/${REPO}/commits --jq "length"`, { encoding: 'utf8' }).trim();
+  // 用 HEAD 的 SHA 判原子性，别数 commits 的条数：那个接口默认每页 30 条，
+  // 仓库一过 30 个提交，"length" 就恒等于 30，断言永远失真（我自己踩的）
+  const headOf = () => execSync(`gh api repos/${OWNER}/${REPO}/git/ref/heads/main --jq ".object.sha"`,
+                                { encoding: 'utf8' }).trim();
+  const before = headOf();
 
   const r = await c.ev(`(async () => {
     const { publish } = window.SGGitHub;
@@ -36,9 +40,12 @@ const OWNER = 'fjkkx77', REPO = 'Step-Guides';
   console.log('浏览器端发布：', out.ok ? 'PASS commit=' + out.commit.slice(0, 7) + ' 文件数=' + out.count : 'FAIL ' + out.err);
   if (!out.ok) process.exit(1);
 
-  const after = execSync(`gh api repos/${OWNER}/${REPO}/commits --jq "length"`, { encoding: 'utf8' }).trim();
-  console.log(`commit 数 ${before} -> ${after}（2 个文件应该只多 1 个 commit）：`,
-              (+after === +before + 1) ? 'PASS' : 'FAIL');
+  const after = headOf();
+  const parent = execSync(`gh api repos/${OWNER}/${REPO}/commits/${after} --jq ".parents[0].sha"`,
+                          { encoding: 'utf8' }).trim();
+  console.log('2 个文件只产生 1 个 commit（新 HEAD 的父提交＝发布前的 HEAD）：',
+              (after !== before && parent === before) ? 'PASS'
+              : `FAIL ${before.slice(0,7)} -> ${after.slice(0,7)}（父 ${parent.slice(0,7)}）`);
   const files = execSync(`gh api repos/${OWNER}/${REPO}/contents/t/_smoke --jq "length"`, { encoding: 'utf8' }).trim();
   console.log('两个文件都在仓库里：', files === '2' ? 'PASS' : 'FAIL 实际 ' + files);
 
@@ -62,4 +69,54 @@ const OWNER = 'fjkkx77', REPO = 'Step-Guides';
   try { execSync(`gh api repos/${OWNER}/${REPO}/contents/t/_smoke`, { stdio: 'pipe' }); }
   catch (e) { gone = true; }
   console.log('测试文件已清理干净：', gone ? 'PASS' : 'FAIL 仓库里还有 t/_smoke');
+
+  // 混进一条「删除一个根本不存在的路径」：不该把整份发布搞垮
+  // （真实场景：编辑教程换图时带的那条"删旧图"指令，路径对不上就 422 BadObjectState）
+  const c3 = await open(420, 900, 1);
+  await c3.goto(`http://127.0.0.1:${PORT}/tests/selftest.html`);
+  const r3 = await c3.ev(`(async () => {
+    const b64 = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+    try {
+      const res = await window.SGGitHub.publish({
+        token: ${JSON.stringify(token)}, owner: '${OWNER}', repo: '${REPO}', branch: 'main',
+        files: [
+          { path: 't/_smoke/c.txt', content: b64('存在的文件') },
+          { path: 't/_smoke/根本没有这个文件.txt', sha: null }
+        ],
+        message: '冒烟测试：删不存在的路径不该炸'
+      });
+      return JSON.stringify({ ok: true, commit: res.commit });
+    } catch (e) { return JSON.stringify({ ok: false, err: e.message }); }
+  })()`);
+  const mix = JSON.parse(r3);
+  console.log('删不存在的路径不会搞垮发布：', mix.ok ? 'PASS' : 'FAIL ' + mix.err);
+
+  // 空改动（要删的都不存在）不该报错，应该原地收工
+  const r4 = await c3.ev(`(async () => {
+    try {
+      const res = await window.SGGitHub.publish({
+        token: ${JSON.stringify(token)}, owner: '${OWNER}', repo: '${REPO}', branch: 'main',
+        files: [{ path: 't/_smoke/也不存在.txt', sha: null }], message: '冒烟：空改动'
+      });
+      return JSON.stringify({ ok: true, noop: !!res.noop });
+    } catch (e) { return JSON.stringify({ ok: false, err: e.message }); }
+  })()`);
+  const nz = JSON.parse(r4);
+  console.log('空改动不报错、原地收工：', nz.ok && nz.noop ? 'PASS' : 'FAIL ' + (nz.err || '没标成 noop'));
+
+  // 清掉刚才那个 c.txt（稍等一下，避开 GitHub 刚写完 ref 读到旧值的那几百毫秒）
+  if (mix.ok) {
+    await new Promise(r => setTimeout(r, 2500));
+    const r5 = await c3.ev(`(async () => { try {
+      await window.SGGitHub.publish({
+        token: ${JSON.stringify(token)}, owner: '${OWNER}', repo: '${REPO}', branch: 'main',
+        files: [{ path: 't/_smoke/c.txt', sha: null }], message: '冒烟测试：清理' });
+      return 'ok'; } catch (e) { return 'ERR ' + e.message; } })()`);
+    if (r5 !== 'ok') console.log('清理没成功：', r5);
+  }
+  await c3.close();
+  let gone2 = false;
+  try { execSync(`gh api repos/${OWNER}/${REPO}/contents/t/_smoke`, { stdio: 'pipe' }); }
+  catch (e) { gone2 = true; }
+  console.log('第二轮也清理干净：', gone2 ? 'PASS' : 'FAIL');
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

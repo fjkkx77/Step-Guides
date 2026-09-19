@@ -21,7 +21,14 @@ const scaleOf = `(() => {
 
   // 点图打开放大层（老教程的壳子里没有 zoom.js，应该被自动加载进来）
   await c.ev(`document.querySelector('.page img').click()`);
-  await sleep(900);
+  // zoom.js/zoom.css 是按需取的，线上首次加载要等一会儿。
+  // 用固定 sleep 会在慢网络下测早（本地秒开看不出来，已经踩过三次），改成等条件成立
+  for (let i = 0; i < 40; i++) {
+    await sleep(250);
+    if (await c.ev(`!!(window.SGZoom && document.getElementById('zoom').open
+                       && document.querySelector('#zoom .zclose'))`)) break;
+  }
+  await sleep(200);
   const st = JSON.parse(await c.ev(`JSON.stringify({
     open: document.getElementById('zoom').open,
     zoomLib: !!window.SGZoom,

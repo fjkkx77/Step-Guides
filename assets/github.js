@@ -30,6 +30,10 @@
   async function api(path, { token, method = 'GET', body } = {}) {
     const r = await fetch(API + path, {
       method,
+      // GitHub 的响应带 Cache-Control: private, max-age=60。不关掉的话，
+      // 「读分支当前指向哪个提交」会吃到最多 60 秒前的旧值：
+      // 表现为发布完立刻再发一次就 422 not a fast forward，连重试都读到同一个旧 SHA。
+      cache: 'no-store',
       headers: {
         'Authorization': 'Bearer ' + token,
         'Accept': 'application/vnd.github+json',
@@ -67,14 +71,10 @@
     const base = `/repos/${owner}/${repo}`;
     const report = p => o.onProgress && o.onProgress(p);
 
-    report({ phase: '读取分支', done: 0, total: 1 });
-    const ref = await api(`${base}/git/ref/heads/${branch}`, { token });
-    const headSha = ref.object.sha;
-    const headCommit = await api(`${base}/git/commits/${headSha}`, { token });
-
-    // 1) 每个文件传成 blob
-    const entries = [];
+    // 1) 先把内容传成 blob。blob 是按内容寻址的，跟分支走到哪儿无关，
+    //    所以只传一次；后面换基重试时可以直接复用，不用重传十几张图
     const uploads = files.filter(f => f.sha !== null);
+    const blobs = [];
     let n = 0;
     for (const f of uploads) {
       report({ phase: '上传文件', done: n, total: uploads.length });
@@ -82,31 +82,64 @@
         token, method: 'POST',
         body: { content: f.content, encoding: f.encoding || 'base64' }
       });
-      entries.push({ path: f.path, sha: blob.sha });
+      blobs.push({ path: f.path, sha: blob.sha });
       n++;
     }
-    for (const f of files.filter(x => x.sha === null)) entries.push({ path: f.path, sha: null });
+    const dels = files.filter(f => f.sha === null);
 
-    // 2) 组 tree（base_tree = 当前，等于「在现有仓库上改这几个文件」）
-    report({ phase: '组装提交', done: 0, total: 1 });
-    const tree = await api(`${base}/git/trees`, {
-      token, method: 'POST',
-      body: { base_tree: headCommit.tree.sha, tree: buildTree(entries) }
-    });
+    // 2) 组 tree → 提交 → 移动分支指针。
+    //    最后一步可能撞上"读 ref 之后 HEAD 又被推进了"（另一台设备发布、
+    //    或上一次发布刚落地），GitHub 回 422 not a fast forward。
+    //    这种情况换成新的 base 再来一轮就行，不必让用户重发一遍。
+    let lastErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      report({ phase: attempt ? '分支被别人推进了，换个基准重来' : '组装提交', done: 0, total: 1 });
+      const ref = await api(`${base}/git/ref/heads/${branch}`, { token });
+      const headSha = ref.object.sha;
+      const headCommit = await api(`${base}/git/commits/${headSha}`, { token });
 
-    // 3) 提交
-    const commit = await api(`${base}/git/commits`, {
-      token, method: 'POST',
-      body: { message, tree: tree.sha, parents: [headSha] }
-    });
+      const entries = blobs.slice();
 
-    // 4) 移动分支指针——到这一步才算真的上去了，前面失败仓库不受影响
-    report({ phase: '提交', done: 0, total: 1 });
-    await api(`${base}/git/refs/heads/${branch}`, {
-      token, method: 'PATCH', body: { sha: commit.sha, force: false }
-    });
+      // 删除：只删「当前 tree 里确实有」的路径。删一个不存在的路径会让整棵 tree
+      // 创建失败（422 GitRPC::BadObjectState），连带整份教程发不出去
+      if (dels.length) {
+        let have = new Set();
+        try {
+          const tree = await api(`${base}/git/trees/${headCommit.tree.sha}?recursive=1`, { token });
+          have = new Set((tree.tree || []).map(x => x.path));
+        } catch (e) { /* 读不到就这轮不删，下次编辑时再收拾 */ }
+        for (const f of dels) {
+          const path = String(f.path).replace(/^\/+/, '');
+          if (have.has(path)) entries.push({ path, sha: null });
+        }
+      }
 
-    return { commit: commit.sha, count: uploads.length };
+      // 一个都不剩＝这次没有任何实际改动。空 tree 交上去会回 422 Invalid tree info
+      if (!entries.length) return { commit: headSha, count: 0, noop: true };
+
+      const tree = await api(`${base}/git/trees`, {
+        token, method: 'POST',
+        body: { base_tree: headCommit.tree.sha, tree: buildTree(entries) }
+      });
+      const commit = await api(`${base}/git/commits`, {
+        token, method: 'POST',
+        body: { message, tree: tree.sha, parents: [headSha] }
+      });
+
+      try {
+        report({ phase: '提交', done: 0, total: 1 });
+        // force 永远为 false：宁可重试，也不能把别人的提交冲掉
+        await api(`${base}/git/refs/heads/${branch}`, {
+          token, method: 'PATCH', body: { sha: commit.sha, force: false }
+        });
+        return { commit: commit.sha, count: uploads.length, retried: attempt > 0 };
+      } catch (e) {
+        lastErr = e;
+        if (attempt === 0 && e.status === 422) { await new Promise(r => setTimeout(r, 800)); continue; }
+        throw e;
+      }
+    }
+    throw lastErr;
   }
 
   /** 等 Pages 真的构建好：轮询到 200 才算成功（推上去 ≠ 线上能打开） */
