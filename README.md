@@ -26,7 +26,9 @@ token 只存在这台设备的浏览器里（localStorage），不会上传到�
 localStorage 按「设备 + 浏览器」隔离，所以每台设备要填一次。两条路：
 
 1. **推荐**：在手机上单独建一个 token（名字写 `教程站-手机`）。手机丢了只吊销这一个。
-2. **省事**：电脑上 ⚙ → 「📱 生成二维码，给手机扫」→ 手机扫码 → 确认导入。
+2. **省事**：电脑上 ⚙ → 「📱 出码」；手机上 ⚙ → 「📷 扫码」**站内直接开摄像头**，
+   不用另外开相机 App（iOS Safari / 安卓 Chrome 都行；**微信内置浏览器可能不给相机权限**，
+   那就用 Safari/Chrome 打开，或者退回用系统相机扫）。
    设置放在 URL 的 `#` 后面，**`#` 之后的内容浏览器不会发给服务器、也不进 Referer**；
    手机读到后立刻把它从地址栏抹掉，确认框里 token 是打码显示的。
    代价是这张码等于仓库写权限，**别让旁人拍到、别截图外发**。
@@ -34,7 +36,11 @@ localStorage 按「设备 + 浏览器」隔离，所以每台设备要填一次�
 ## 怎么写一份教程
 
 1. 打开 `/w/`，填标题
-2. 加图：点「选择图片」／电脑上直接 `Ctrl+V` 粘贴／把文件拖进来
+2. 加图，三个入口：
+   - 「＋ 选择图片」（手机就是相册多选）
+   - 「📋 粘贴图片」（直接读剪贴板；iOS 会弹一个"粘贴"确认）
+   - 下面那个虚线框：**手机上在框里长按 → 选「粘贴」**（没有 Ctrl+V 的设备走这条）
+   - 电脑上还可以直接 `Ctrl+V`、或者把文件拖进页面
 3. 每一步写说明（标题可不填）
 4. 顺序不对：手机上用 `↑ ↓` 和 `⋯ → 移到第几步`；电脑上直接拖
 5. 点「发布」，等 GitHub 构建完（通常几十秒），复制链接发出去
@@ -60,12 +66,24 @@ node tools/verify.js t/qhftq5kz/ --mode=long  # 长文模式
 node tools/verify-writer.js               # 写作页三档
 node tools/verify.js t/qhftq5kz/ --base=https://fjkkx77.github.io/Step-Guides/   # 直接验线上
 node tools/smoke-publish.js               # 真发一次再删掉（验原子提交+跨域+删除路径）
-node tools/verify-qr.js                   # 二维码：用独立解码器 jsQR 交叉验 + 扫码后的导入流程
+node tools/verify-qr.js                   # 出码：用独立解码器 jsQR 交叉验 + 链接导入流程
+node tools/verify-scan.js                 # 扫码：静态图喂给真正的解码函数（不开摄像头，见下）
+node tools/verify-paste.js                # 手机粘贴的两条路径
 ```
 
+> **测试红线：不跑任何会申请摄像头/麦克风的自动化测试。**
+> 2026-09-18 试过用 Chrome 的「假摄像头」参数做端到端测试，那个参数没生效，
+> 打开的是本机真摄像头、拍到了真人画面。现在 `verify-scan.js` 改成把**静态二维码图片**
+> 喂给扫码时真正用的那个解码函数，摄像头本身能不能开、扫得顺不顺，**由人在真机上确认**——
+> 那才是这功能的实际运行环境，本机测出来的结论对手机也不作数。
+
 `assets/vendor/qrcode.js` 是 qrcode-generator 2.0.4（MIT）原样放进来的，不走 CDN。
-`tools/vendor/jsqr.js` 是 jsQR 1.4.0（Apache-2.0），**只在验证时注入，不进产品页面**——
-用生成器自己验自己没意义，必须拿另一套独立实现交叉验。
+`assets/vendor/jsqr.js` 是 jsQR 1.4.0（Apache-2.0）：手机扫码时**按需加载**（iOS Safari 没有
+`BarcodeDetector`，只能走它；安卓 Chrome 有就直接用系统解码器，不下这个包）。
+它同时也是验证时的交叉校验器——用生成器自己验自己没意义。
+
+根目录的 `.nojekyll` 不能删：GitHub Pages 默认跑 Jekyll，而 Jekyll 的默认排除列表里有 `vendor/`，
+删了它 `assets/vendor/*.js` 线上会 404。
 
 验证用的是真实窄屏视口（headless Chrome + CDP），不是注入 CSS 假装断点。
 

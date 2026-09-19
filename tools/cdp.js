@@ -19,7 +19,7 @@ process.on('exit', killAll);
 process.on('SIGINT', () => { killAll(); process.exit(1); });
 process.on('SIGTERM', () => { killAll(); process.exit(1); });   // 被外部结束（超时、工具取消）时也要收尾
 process.on('uncaughtException', e => { console.error('FAIL', e && e.message); killAll(); process.exit(1); });
-async function open(w, h, scale) {
+async function open(w, h, scale, extraArgs) {   // extraArgs：额外的 chrome 启动参数（例如假摄像头）
   const port = 20000 + Math.floor(Math.random() * 20000);
   // 目录名带上本 node 进程号：多个会话同时跑脚手架时，残留要能分清是谁的。
   // 2026-09-13 踩过：名字全是 cdp-xxxx，凭"启动时间对得上"认领残留，误杀了另一个会话正在跑的测试浏览器
@@ -27,7 +27,8 @@ async function open(w, h, scale) {
   const tag = path.basename(dir);
   const proc = spawn('C:/Program Files/Google/Chrome/Application/chrome.exe',
     ['--headless=new', '--remote-debugging-port=' + port, '--user-data-dir=' + dir, '--no-first-run',
-     '--no-default-browser-check', '--disable-gpu', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore' });
+     '--no-default-browser-check', '--disable-gpu', '--hide-scrollbars',
+     ...(extraArgs || []), 'about:blank'], { stdio: 'ignore' });
   LIVE.push({ pid: proc.pid, dir, tag });
   let ws = null;
   for (let i = 0; i < 60; i++) {

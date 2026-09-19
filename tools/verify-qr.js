@@ -11,9 +11,10 @@ const FAKE = 'github_pat_11ABCDEFG0' + 'x'.repeat(59) + 'Z9';  // 长度照真 t
   const c = await open(900, 900, 1);
   await c.goto(`http://127.0.0.1:${PORT}/w/`);
   await sleep(600);
-  // jsQR 是另一套独立写的解码器（Apache-2.0），只在验证时注入，不进产品页面：
-  // 用生成器自己验自己没有意义，必须拿独立实现交叉验
-  await c.ev(require('fs').readFileSync(__dirname + '/vendor/jsqr.js', 'utf8'));
+  // jsQR 是另一套独立写的解码器（Apache-2.0）。
+  // 它现在也是产品的一部分（手机扫码用它），但在这里的用途仍是「交叉验证」：
+  // 用生成器自己验自己没有意义，必须拿独立实现来解
+  await c.ev(require('fs').readFileSync(__dirname + '/../assets/vendor/jsqr.js', 'utf8'));
 
   const r = await c.ev(`(async () => {
     const out = {};

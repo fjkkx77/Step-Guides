@@ -416,15 +416,11 @@
     $('#dlg-qr').showModal();
   }
 
-  /** 手机扫码打开后：先给人看清楚要导入什么，确认了才写进这台设备 */
-  function importFromHash() {
-    const m = /^#cfg=(.+)$/.exec(location.hash);
-    if (!m) return false;
-    // 不管用户点什么，先把地址栏里的 token 抹掉，别留在历史记录里
-    history.replaceState(null, '', location.pathname + location.search);
+  /** 拿到 cfg 载荷后的统一入口：先给人看清楚要导入什么，确认了才写进这台设备 */
+  function askImport(raw) {
     let p;
-    try { p = JSON.parse(unb64url(m[1])); } catch (e) { alert('这个二维码读不出来（可能扫串了）'); return false; }
-    if (!p || !p.t) { alert('这个二维码里没有 token'); return false; }
+    try { p = JSON.parse(unb64url(raw)); } catch (e) { alert('这个码读不出来（可能扫串了）'); return false; }
+    if (!p || !p.t) { alert('这个码里没有 token'); return false; }
     const mask = p.t.length > 16 ? p.t.slice(0, 11) + '…' + p.t.slice(-4) : '（已隐藏）';
     $('#imp-kv').innerHTML =
       `<div><b>GitHub 用户名</b><code>${esc(p.o || '')}</code></div>` +
@@ -441,6 +437,165 @@
     $('#btn-imp-no').onclick = () => $('#dlg-import').close();
     $('#dlg-import').showModal();
     return true;
+  }
+
+  /** 从一条链接里扒出 cfg 载荷（扫码扫到的、或自己地址栏里的） */
+  const cfgFromUrl = u => (/[#?]cfg=([A-Za-z0-9\-_]+)/.exec(u || '') || [])[1] || null;
+
+  /** 用系统相机扫码、从链接进来时走这条 */
+  function importFromHash() {
+    const raw = cfgFromUrl(location.hash);
+    if (!raw) return false;
+    // 不管用户点什么，先把地址栏里的 token 抹掉，别留在历史记录里
+    history.replaceState(null, '', location.pathname + location.search);
+    return askImport(raw);
+  }
+
+  /* ── 站内扫码：直接开摄像头，不用另开相机 App ──────
+     优先用浏览器自带的 BarcodeDetector（安卓 Chrome 有）；
+     没有就按需加载 jsQR（iOS Safari 走这条）——按需是为了不拖慢平时打开页面 */
+  let camStream = null, scanTimer = null;
+
+  async function ensureDecoder() {
+    if ('BarcodeDetector' in window) {
+      try {
+        const fmts = await BarcodeDetector.getSupportedFormats();
+        if (fmts.includes('qr_code')) {
+          const det = new BarcodeDetector({ formats: ['qr_code'] });
+          return async cv => {
+            const r = await det.detect(cv);
+            return r.length ? r[0].rawValue : null;
+          };
+        }
+      } catch (e) { /* 掉到 jsQR */ }
+    }
+    if (!window.jsQR) {
+      await new Promise((res, rej) => {
+        const sc = document.createElement('script');
+        sc.src = '../assets/vendor/jsqr.js';
+        sc.onload = res;
+        sc.onerror = () => rej(new Error('解码器加载失败'));
+        document.head.appendChild(sc);
+      });
+    }
+    return async cv => {
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+      const px = ctx.getImageData(0, 0, cv.width, cv.height);
+      const got = window.jsQR(px.data, px.width, px.height, { inversionAttempts: 'dontInvert' });
+      return got ? got.data : null;
+    };
+  }
+
+  function stopScan() {
+    clearInterval(scanTimer); scanTimer = null;
+    if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+    const v = $('#cam');
+    if (v) v.srcObject = null;
+  }
+
+  async function startScan() {
+    const dlg = $('#dlg-scan');
+    $('#scan-msg').textContent = '正在打开摄像头…';
+    if (!dlg.open) dlg.showModal();
+    let decode;
+    try {
+      decode = await ensureDecoder();
+      camStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }, audio: false
+      });
+    } catch (e) {
+      $('#scan-msg').textContent = '打不开摄像头：' + e.message +
+        '。多半是没给相机权限，或者你在微信内置浏览器里——用 Safari / Chrome 打开试试。';
+      return;
+    }
+    const v = $('#cam');
+    v.srcObject = camStream;
+    await v.play().catch(() => {});
+    $('#scan-msg').textContent = '把电脑上那个码放进框里';
+
+    const cv = document.createElement('canvas');
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    scanTimer = setInterval(async () => {
+      if (!v.videoWidth) return;
+      // 缩到 480 宽再解：全分辨率逐帧解在手机上会烫手，480 够解 53×53 的码
+      const k = Math.min(1, 480 / v.videoWidth);
+      cv.width = Math.round(v.videoWidth * k);
+      cv.height = Math.round(v.videoHeight * k);
+      ctx.drawImage(v, 0, 0, cv.width, cv.height);
+      let text = null;
+      try { text = await decode(cv); } catch (e) { /* 这一帧没解出来，继续 */ }
+      if (!text) return;
+      const raw = cfgFromUrl(text);
+      if (!raw) { $('#scan-msg').textContent = '扫到的不是这个网站的设置码，换一个试试'; return; }
+      stopScan();
+      dlg.close();
+      askImport(raw);
+    }, 220);
+  }
+
+  /* ── 手机上怎么粘贴图片 ──────────────────────────
+     手机没有 Ctrl+V，只有两条路：
+     ① navigator.clipboard.read()（iOS Safari 会弹一个「粘贴」确认，安卓 Chrome 要权限）
+     ② 一个可长按的框：长按 → 系统菜单「粘贴」→ 触发 paste 事件 */
+  async function pasteFromClipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      alert('这个浏览器不支持直接读剪贴板。在下面那个虚线框里长按，选「粘贴」也一样。');
+      $('#pastebox').focus();
+      return;
+    }
+    try {
+      const items = await navigator.clipboard.read();
+      const files = [];
+      for (const it of items) {
+        const type = it.types.find(t => t.startsWith('image/'));
+        if (!type) continue;
+        const blob = await it.getType(type);
+        files.push(new File([blob], 'paste-' + Date.now() + '.' + type.split('/')[1], { type }));
+      }
+      if (!files.length) { alert('剪贴板里没有图片'); return; }
+      await addFiles(files);
+    } catch (e) {
+      alert('读剪贴板没成功：' + e.message + '。在下面那个虚线框里长按选「粘贴」试试。');
+      $('#pastebox').focus();
+    }
+  }
+
+  /** 粘贴框：既接 paste 事件里的文件，也兜住「图片被直接塞进框里」的情况（iOS 有时这样） */
+  function wirePasteBox() {
+    const box = $('#pastebox');
+    if (!box) return;
+    box.addEventListener('paste', async e => {
+      // 全局那个 Ctrl+V 监听也会收到这个事件（冒泡），不拦的话同一张图会被加两次
+      e.stopPropagation();
+      const files = [...(e.clipboardData ? e.clipboardData.files : [])].filter(f => f.type.startsWith('image/'));
+      if (files.length) {
+        e.preventDefault();
+        box.textContent = '';
+        await addFiles(files);
+        return;
+      }
+      // 事件里没有文件：让浏览器先粘进来，下一帧把塞进来的 <img> 捞出来转成文件
+      setTimeout(async () => {
+        const imgs = [...box.querySelectorAll('img')];
+        if (!imgs.length) { box.textContent = ''; return; }
+        const got = [];
+        for (const im of imgs) {
+          try {
+            const blob = await fetch(im.src).then(r => r.blob());
+            if (blob.type.startsWith('image/')) {
+              got.push(new File([blob], 'paste-' + Date.now() + '.' + blob.type.split('/')[1], { type: blob.type }));
+            }
+          } catch (err) { /* 这张拿不到就跳过 */ }
+        }
+        box.textContent = '';
+        if (got.length) await addFiles(got);
+      }, 120);
+    });
+    // 别让它变成一个能打字的框：粘图片以外的输入一律清掉
+    box.addEventListener('input', () => {
+      if (box.querySelector('img')) return;
+      if (box.textContent.trim()) box.textContent = '';
+    });
   }
 
   /* ── 设置 ─────────────────────────────────────────── */
@@ -543,6 +698,11 @@
       alert('token 已从这台设备清除');
     };
     $('#btn-qr').onclick = showQr;
+    $('#btn-scan').onclick = () => { $('#dlg-settings').close(); startScan(); };
+    $('#btn-scan-close').onclick = () => { stopScan(); $('#dlg-scan').close(); };
+    $('#dlg-scan').addEventListener('close', stopScan);   // 安卓返回键关弹层也要断摄像头
+    $('#btn-clip').onclick = pasteFromClipboard;
+    wirePasteBox();
     $('#btn-qr-close').onclick = () => { $('#qr-img').src = ''; $('#dlg-qr').close(); };
     $('#btn-publish').onclick = doPublish;
     $('#btn-export').onclick = exportOne;
@@ -561,7 +721,8 @@
   }
 
   // 给验证脚本用的测试口（也方便自己在控制台里手动检查状态）
-  window.SGWriter = { addFiles, render, b64url, unb64url, cfgToUrl, get draft() { return draft; } };
+  window.SGWriter = { addFiles, render, b64url, unb64url, cfgToUrl, cfgFromUrl, askImport,
+                      startScan, stopScan, ensureDecoder, get draft() { return draft; } };
 
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', boot) : boot();
 })();

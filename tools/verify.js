@@ -51,11 +51,18 @@ const probes = {
       return Math.min(...bs.map(b => { const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); }));
     })()`,
   sameScreen: SAME_SCREEN,
-  // 子路径部署时相对路径最容易出错：CSS 没加载页面照样"能看"，但布局全错
+  // 子路径部署时相对路径最容易出错：CSS 没加载页面照样"能看"，但布局全错。
+  // 判据要挑「两种模式下都成立」的信号——早先拿 .deck 的 display==='flex' 当判据，
+  // 结果长文模式本来就是 block，误报了一轮。
   assetsOk: `(() => {
-      const styled = getComputedStyle(document.querySelector('.deck') || document.body).display === 'flex';
-      const jsRan = !!document.querySelector('.page');
-      return { styled, jsRan };
+      const base = getComputedStyle(document.documentElement).getPropertyValue('--tap').trim();
+      const badge = document.querySelector('.badge');
+      const radius = badge ? getComputedStyle(badge).borderRadius : '';
+      return {
+        baseCss: base !== '',                                  // base.css 里的变量
+        readerCss: !!radius && radius !== '0px',               // reader.css 给 .badge 的圆角
+        jsRan: !!document.querySelector('.page')
+      };
     })()`
 };
 
@@ -84,7 +91,8 @@ const probes = {
     chk('无横向溢出', out.scrollWidth <= w + 1, `scrollWidth=${out.scrollWidth}`);
     chk('正文 ≥16px', out.bodyFont >= 16, out.bodyFont + 'px');
     if (out.assetsOk) {
-      chk('CSS 真的加载了', out.assetsOk.styled, JSON.stringify(out.assetsOk));
+      chk('base.css 真的加载了', out.assetsOk.baseCss, JSON.stringify(out.assetsOk));
+      chk('reader.css 真的加载了', out.assetsOk.readerCss, '');
       chk('JS 真的跑了（渲染出步骤）', out.assetsOk.jsRan, '');
     }
     if (out.minTap != null) chk('触摸目标 ≥44px', out.minTap >= 44, '最小 ' + Math.round(out.minTap) + 'px');

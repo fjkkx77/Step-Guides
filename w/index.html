@@ -21,9 +21,14 @@
 
 <div class="addzone" id="addzone">
   <b>把截图放进来</b>
-  <span id="addhint">点下面的按钮选图，或直接 Ctrl+V 粘贴、拖进来</span>
-  <div><label class="addbtn tap" for="pick">＋ 选择图片</label></div>
+  <span id="addhint">从相册选，或粘贴、拖进来</span>
+  <div class="addrow">
+    <label class="addbtn tap" for="pick">＋ 选择图片</label>
+    <button class="addbtn2 tap" id="btn-clip" type="button">📋 粘贴图片</button>
+  </div>
   <input id="pick" type="file" accept="image/*" multiple hidden>
+  <div class="pastebox" id="pastebox" contenteditable="true" role="textbox"
+       aria-label="在这里长按然后选粘贴" data-ph="手机上：在这个框里长按 → 选「粘贴」"></div>
 </div>
 
 <footer class="wbottom">
@@ -52,8 +57,22 @@
       <button class="tap go" id="btn-save-set" type="button">保存</button>
     </div>
     <div class="row">
-      <button class="tap" id="btn-qr" type="button">📱 生成二维码，给手机扫</button>
+      <button class="tap" id="btn-qr" type="button">📱 出码（在电脑上点）</button>
+      <button class="tap" id="btn-scan" type="button">📷 扫码（在手机上点）</button>
     </div>
+  </div>
+</dialog>
+
+<!-- 手机端扫码：站内直接开摄像头，不用另外开相机 App -->
+<dialog id="dlg-scan">
+  <div class="sheet">
+    <h2>扫电脑上那个码</h2>
+    <p id="scan-msg">正在打开摄像头…</p>
+    <div class="camwrap">
+      <video id="cam" playsinline muted autoplay></video>
+      <div class="reticle"></div>
+    </div>
+    <div class="row"><button class="tap go" id="btn-scan-close" type="button">取消</button></div>
   </div>
 </dialog>
 
