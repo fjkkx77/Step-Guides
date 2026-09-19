@@ -1,12 +1,16 @@
 const { open, sleep } = require('./cdp.js');
+// 默认验本地；传 --base=https://… 可以直接验线上
+const BASE = (process.argv.find(a => a.startsWith('--base=')) || '').split('=').slice(1).join('=');
+const PAGE = (process.argv.find(a => !a.startsWith('--') && a.indexOf('/t/') >= 0 || /^t\//.test(a || '')) || 't/qhftq5kz/');
+const URL = (BASE ? BASE.replace(/\/$/, '') + '/' : 'http://127.0.0.1:8879/') + PAGE;
 (async () => {
   let bad = 0;
   const chk = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${n}${d ? ' — ' + d : ''}`); if (!ok) bad++; };
   const c = await open(390, 844, 2);
-  await c.goto('http://127.0.0.1:8879/t/qhftq5kz/');
+  await c.goto(URL);
   for (let i = 0; i < 40; i++) { await sleep(250); if (await c.ev(`!!document.querySelector('.page')`)) break; }
   await c.ev(`localStorage.setItem('sg.readMode','long')`);
-  await c.goto('http://127.0.0.1:8879/t/qhftq5kz/');
+  await c.goto(URL);
   for (let i = 0; i < 40; i++) { await sleep(250); if (await c.ev(`!!document.querySelector('.page')`)) break; }
   // 等模式真的切过去再断言：mode 是 boot 里才设的，读早了会拿到默认值
   let isLong = false;
@@ -17,6 +21,14 @@ const { open, sleep } = require('./cdp.js');
   chk('确实在长文模式', isLong);
   chk('刚进来没有悬浮键', (await c.ev(`(() => { const f = document.querySelector('.fab'); return !f || !f.classList.contains('on'); })()`)) === true);
 
+  // 页面本身不够长就没有"滚远"这回事（步数少的教程会这样），这时跳过后面几条
+  const canScroll = await c.ev(`document.documentElement.scrollHeight > innerHeight + 900`);
+  if (!canScroll) {
+    console.log('SKIP 这份教程在长文模式下不足一屏半，"滚远"相关的几条跳过');
+    await c.close();
+    console.log(bad ? ('共 ' + bad + ' 条未通过') : '全部通过（部分跳过）');
+    process.exit(bad ? 1 : 0);
+  }
   await c.ev(`scrollTo(0, 2500)`);
   await sleep(600);
   const st = JSON.parse(await c.ev(`JSON.stringify((() => {
