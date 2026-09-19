@@ -80,7 +80,12 @@ node tools/verify-paste.js                # 手机粘贴的两条路径
 node tools/verify-editor.js               # 预览 / 换图 / 缩略图放大 / 离开逻辑
 node tools/verify-zoom.js                 # 放大器（滚轮/双击/拖动/关闭）
 node tools/verify-gestures.js             # 左滑删除 + 长按拖动（真实触摸事件）
+node tools/verify-nav.js [站点地址]        # 返回/主页键落在哪（每个场景一个干净浏览器）
 ```
+
+写测试时的两个教训（都栽过）：**别用固定 sleep 等页面**，等条件成立；
+**别拿 `window.SGWriter` 当"脚本就绪"信号**——它在 `boot()` 之前就挂上了，
+那时按钮还没绑事件，点了等于没点。要等就等 `btn.onclick` 真的有值。
 
 > **测试红线：不跑任何会申请摄像头/麦克风的自动化测试。**
 > 2026-09-18 试过用 Chrome 的「假摄像头」参数做端到端测试，那个参数没生效，
