@@ -3,7 +3,8 @@
    恰恰在文字被裁得最狠（1~2 行）的那一档藏掉了，用户在 iPhone 上根本不知道有下文。
    所以这里**必须带上矮屏档**，只测 390×844 是测不出来的。
 
-   用法：node tools/verify-more.js [站内路径]
+   用法：node tools/verify-more.js [站内路径] [--base=https://…]
+   带 --base 就直接验线上（发布后必须核一次，别只信本地）。
 */
 const { open, sleep } = require('./cdp.js');
 const { spawn } = require('child_process');
@@ -21,6 +22,7 @@ function freePort() {
   });
 }
 
+const BASE = (process.argv.find(a => a.startsWith('--base=')) || '').split('=').slice(1).join('=');
 let page = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 't/qhftq5kz/';
 page = '/' + String(page).replace(/^[A-Za-z]:.*?[\\/](?=t\/|w\/|mine\/|$)/, '').replace(/^\/+/, '');
 
@@ -116,18 +118,26 @@ const TOGGLE = `(async () => {
 })()`;
 
 (async () => {
-  const PORT = await freePort();
-  const srv = spawn(process.execPath, [path.join(__dirname, 'mock.js'), path.resolve(__dirname, '..'), String(PORT)], { stdio: ['ignore', 'ignore', 'inherit'] });
-  await sleep(600);
-  // 服务真起来了才往下走，否则后面每一档都是在测一个空页面
-  const probe = await fetch(`http://127.0.0.1:${PORT}${page}`).then(r => r.ok).catch(() => false);
-  if (!probe) { console.error('本地服务没起来，端口 ' + PORT); process.exit(2); }
+  let srv = null, target;
+  if (BASE) {
+    target = BASE.replace(/\/$/, '') + page;
+  } else {
+    const PORT = await freePort();
+    srv = spawn(process.execPath, [path.join(__dirname, 'mock.js'), path.resolve(__dirname, '..'), String(PORT)], { stdio: ['ignore', 'ignore', 'inherit'] });
+    await sleep(600);
+    target = `http://127.0.0.1:${PORT}${page}`;
+    // 服务真起来了才往下走，否则后面每一档都是在测一个空页面
+    const probe = await fetch(target).then(r => r.ok).catch(() => false);
+    if (!probe) { console.error('本地服务没起来，端口 ' + PORT); process.exit(2); }
+  }
+  console.log('验的是：' + target);
+
   let bad = 0, toggled = 0;
   try {
     for (const [w, h, name, minCut] of VIEWS) {
       const c = await open(w, h, 3);
       try {
-        await c.goto(`http://127.0.0.1:${PORT}${page}`);
+        await c.goto(target);
         await sleep(500);
         const r = JSON.parse(await c.ev(CHECK));
         const t = JSON.parse(await c.ev(TOGGLE));
@@ -158,7 +168,7 @@ const TOGGLE = `(async () => {
       } catch (e) { bad++; console.log(`✗ ${name} 挂了：${e.message}`); }
       finally { await c.close(); }
     }
-  } finally { srv.kill(); }
+  } finally { if (srv) srv.kill(); }
   console.log(bad ? `\n${bad} 档没过` : '\n全部档位通过');
   process.exit(bad ? 1 : 0);
 })().catch(e => { console.error('FAIL', e.message); process.exit(2); });
