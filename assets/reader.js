@@ -28,13 +28,13 @@
 
   let steps = [], cur = 0;
 
-  /* 观感层档位。默认 a（克制版）。
-     ?fx=b  更进一步（悬浮胶囊底栏 + 分段进度）
-     ?fx=off 完全关掉，退回最朴素的样子 —— 出对比图、以及万一线上出问题时的退路 */
+  /* 观感层档位。**默认关闭**（2026-09-20 回滚）。
+     回滚原因：逐步模式的视差把 opacity 写成行内样式，切到长文模式后视差不再运行、
+     但行内样式没人清 —— 长文模式下的说明文字一直半透明，没法看。
+     想再看效果加 ?fx=a / ?fx=b；要重新默认开启，必须先修掉上面那个清理问题。 */
   const FX = (() => {
     const q = new URLSearchParams(location.search).get('fx');
-    if (q === 'off' || q === '0') return '';
-    return (q === 'a' || q === 'b') ? q : 'a';
+    return (q === 'a' || q === 'b') ? q : '';
   })();
 
   const mode = () => document.documentElement.dataset.mode;
