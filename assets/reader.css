@@ -69,16 +69,37 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .say p{margin:0;font-size:16px;line-height:1.72;color:var(--ink2);white-space:pre-wrap}
 
 /* step 模式下正文默认只给 3 行：长说明会把截图挤到看不清（320 档实测能挤到 100px 宽）。
-   想看全文点「展开」。long 模式不裁，那里本来就是拿来细看的。 */
-html[data-mode="step"] .say:not(.open) p{
+   想看全文点一下。long 模式不裁，那里本来就是拿来细看的。 */
+.txt{position:relative}
+html[data-mode="step"] .say:not(.open) .txt p{
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
 }
- /* 「展开」不做成小按钮：整块文字都可以点（热区远大于 44px），
-    这里只是给一个看得见的提示 */
+/* 量"到底裁没裁"时临时用它取消裁剪，见 reader.js 的 measureClamp() */
+.txt p.unclamp{display:block !important;-webkit-line-clamp:unset !important;overflow:visible !important}
+
+/* 「更多」不做成小按钮：整块文字都可以点（热区远大于 44px），这里只是提示。
+   叠在末行右端、背后垫一道渐隐 —— **不占额外行高**，所以矮屏也不用再把它藏掉。
+   这是 Apple App Store 简介那一套做法。 */
 .more{
-  display:inline-block;margin-top:4px;
-  font-size:14px;color:var(--brand);
+  position:absolute;right:0;bottom:0;
+  display:inline-flex;align-items:center;gap:4px;
+  padding-left:38px;                     /* 渐隐要有足够长度过渡，太短会像块色板 */
+  font-size:14px;font-weight:600;color:var(--brand);line-height:inherit;
+  background:linear-gradient(to right,rgba(0,0,0,0),var(--card) 34%);
+  pointer-events:none;                   /* 点击交给整块 .say，这里只负责"看得见" */
 }
+.chev{
+  width:6px;height:6px;flex:0 0 auto;
+  border-right:1.7px solid currentColor;border-bottom:1.7px solid currentColor;
+  transform:rotate(45deg) translate(-1px,-2px);
+  transition:transform .3s cubic-bezier(.22,1,.36,1);
+}
+/* 展开后让它回到文字流里另起一行：这时已经有空间了，不必再叠 */
+.say.open .more{
+  position:static;background:none;padding-left:0;margin-top:2px;
+}
+.say.open .chev{transform:rotate(-135deg) translate(-1px,2px)}
+
 html[data-mode="step"] .say.can-open{cursor:pointer}
 html[data-mode="long"] .more{display:none}
 html[data-mode="step"] .say.open{max-height:52vh}
@@ -143,17 +164,20 @@ html[data-mode="long"] .topbar-progress{display:none}
   .say .h{margin-bottom:3px}
   .say h2{font-size:15px;line-height:1.3}
   .say p{font-size:15px;line-height:1.55}
-  .more{display:none}                    /* 提示文字省掉，正文本身带省略号，点一下照样展开 */
+  /* 这里曾经写 `.more{display:none}`「省高度」——结果把唯一能看出"还能展开"的提示，
+     恰恰在文字被裁得最狠（1~2 行）的那一档藏掉了，用户反馈「以为就这么多内容」。
+     现在提示是叠在末行上的，本来就不占高度，不需要藏。 */
+  .more{font-size:13px}
   .bottom{padding-top:3px;padding-bottom:calc(3px + env(safe-area-inset-bottom));gap:8px}
   .bottom button{height:44px}
-  html[data-mode="step"] .say:not(.open) p{-webkit-line-clamp:2}
+  html[data-mode="step"] .say:not(.open) .txt p{-webkit-line-clamp:2}
 }
 
 /* 更矮的：正文先给 1 行，点一下就能展开。
    断点定在 660：iPhone 14/15 在 Safari 里带上下工具栏时可视高度就落在 640 上下，
    正是最需要把高度让给截图的那一档 */
 @media (max-height:660px){
-  html[data-mode="step"] .say:not(.open) p{-webkit-line-clamp:1}
+  html[data-mode="step"] .say:not(.open) .txt p{-webkit-line-clamp:1}
   .say h2{font-size:14px}
 }
 
@@ -266,3 +290,147 @@ html[data-mode="long"] .topbar-progress{display:none}
 .fab.on{opacity:1;transform:none;pointer-events:auto}
 html[data-mode="step"] .fab{display:none}     /* 逐步模式一屏一步，用不上 */
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .fab{background:rgba(240,240,245,.9);color:#111} }
+
+
+/* ══════════════════════════════════════════════════════════════
+   观感层（data-fx）：让页面"活"起来，但不改版式骨架
+   分档开关，方便只保留想要的部分：
+     data-fx="a"  材质与层次 + 翻页视差 + 微交互反馈（版式一动不动）
+     data-fx="b"  在 a 之上：底栏改成悬浮胶囊、进度改成分段
+   关掉（没有 data-fx）就是原来的样子，随时可退。
+
+   取值依据：缓动曲线直接沿用 day-rail / 日程卡片里已经用顺手的那几条
+   （第二个控制点 >1 ＝ 冲过头再收回来，这是那两个站"有生气"的来源）。
+   模糊/饱和这两个数是我自己调的近似值，不是什么官方规范。
+   ══════════════════════════════════════════════════════════════ */
+
+html[data-fx] body{
+  /* 平色底 → 顶部一层极淡的品牌色晕。深度靠材质做，不靠加描边 */
+  background:
+    radial-gradient(125% 70% at 50% -10%, color-mix(in srgb, var(--brand) 9%, transparent), transparent 62%),
+    var(--bg);
+}
+@supports not (color: color-mix(in srgb, red, blue)){
+  html[data-fx] body{background:var(--bg)}      /* 老浏览器就保持平色，不做半吊子效果 */
+}
+
+/* 半透明 + 背景模糊：iOS 那种"材质"感的来源。
+   注意逐步模式下栏后面没有内容经过，所以这里主要是叠在上面那层色晕上，效果是克制的；
+   长文模式顶栏是 sticky，内容真的从下面穿过去，那里最明显。 */
+html[data-fx] .top,
+html[data-fx] .bottom{
+  background:var(--bar);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  backdrop-filter:saturate(180%) blur(20px);
+}
+
+/* 截图从"贴着一条边框"变成"浮在页面上"：多层阴影，近处紧实、远处扩散 */
+html[data-fx] .shot img{
+  border-color:color-mix(in srgb, var(--line) 60%, transparent);
+  box-shadow:
+    0 1px 2px rgba(16,18,40,.06),
+    0 10px 28px -8px rgba(16,18,40,.20);
+}
+html[data-fx] .say{
+  box-shadow:
+    0 1px 2px rgba(16,18,40,.05),
+    0 8px 22px -10px rgba(16,18,40,.18);
+}
+
+/* ── 入场：图先起，字依次跟上 ──────────────────────────
+   只在「用按钮/面板/键盘跳到某一步」和首次打开时播，**手指滑动翻页时不播**。
+   滑动本来就有视差和淡入在接管，再叠一层入场动画，会在吸附到位的瞬间
+   把已经看得见的文字又从透明重播一遍，反而发抖。所以触发器是 .enter（由 goto 打），
+   不是 .is-cur（那个只是状态标记）。 */
+@keyframes fxRise{
+  from{opacity:0;transform:translateY(7px)}
+  to{opacity:1;transform:none}
+}
+@keyframes fxBadgePop{
+  0%{transform:scale(.6);opacity:0}
+  100%{transform:scale(1);opacity:1}
+}
+/* 图不能直接做动画：它身上有视差写的行内 transform，CSS 动画会把它整个盖掉。
+   所以动画挂在外层 .shot 上，两者各管各的 */
+html[data-fx] .page.enter .shot{animation:fxRise .40s cubic-bezier(.2,.9,.3,1) both}
+html[data-fx] .page.enter .say .h{animation:fxRise .40s cubic-bezier(.2,.9,.3,1) .07s both}
+html[data-fx] .page.enter .say .txt{animation:fxRise .40s cubic-bezier(.2,.9,.3,1) .12s both}
+html[data-fx] .page.enter .badge{animation:fxBadgePop .46s cubic-bezier(.2,1.35,.4,1) .05s both}
+
+/* ── 顶栏按钮胶囊化 ────────────────────────────────────
+   原来「12 步」「长文」是两团裸文字，顶栏看着没结构。给一层很淡的同色系底，
+   立刻就有"这是俩按钮"的读感。高度压到 44（仍然踩着 Apple HIG 的下限，
+   verify.js 的 ≥44 断言也守着这条线），比原来的 48 省 4px 给截图。 */
+html[data-fx] .modebtn,
+html[data-fx] .stepsbtn{
+  height:44px;min-width:44px;
+  padding:0 12px;border-radius:14px;
+  background:var(--pill);
+  font-weight:600;
+}
+
+/* 按下要有反馈：手指按住时缩一点，松开弹回来。
+   没有这个，点按钮的感觉就是"死"的（按下去毫无回应） */
+html[data-fx] .bottom button,
+html[data-fx] .modebtn,
+html[data-fx] .stepsbtn{
+  transition:transform .2s cubic-bezier(.2,.9,.3,1), background .2s, opacity .2s;
+}
+html[data-fx] .bottom button:active:not(:disabled){transform:scale(.955)}
+html[data-fx] .modebtn:active,
+html[data-fx] .stepsbtn:active{transform:scale(.92)}
+
+/* 进度条填充带一点回弹，翻页时能看见它"追"过去 */
+html[data-fx] .bar i{transition:width .42s cubic-bezier(.2,1.2,.35,1)}
+
+/* 翻页视差：图比页面挪得慢、说明卡淡出下沉。
+   具体位移由 JS 按滚动进度逐帧写（只写 transform/opacity，不触发重排） */
+html[data-fx] .shot img,
+html[data-fx] .say{will-change:auto}      /* 别常驻 will-change：图会被一次性栅格化后拉伸变糊 */
+
+/* ── data-fx="b"：再进一步 ───────────────────────────── */
+/* 底栏从"一条带边框的横条"改成悬浮胶囊：截图能从它下面穿过去，
+   毛玻璃这才有东西可糊，观感差别最大的一处 */
+html[data-fx="b"] .bottom{
+  position:absolute;left:10px;right:10px;
+  bottom:calc(8px + env(safe-area-inset-bottom));
+  border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius:18px;
+  padding:6px;
+  box-shadow:0 6px 24px -8px rgba(16,18,40,.28);
+  z-index:15;
+}
+html[data-fx="b"] body{position:relative}
+html[data-fx="b"] .bottom button{background:transparent;border:0}
+html[data-fx="b"] .bottom button:not(:disabled){background:color-mix(in srgb, var(--card) 85%, transparent)}
+/* 胶囊浮在上面，给内容留出它的高度，别把说明卡压住 */
+html[data-fx="b"][data-mode="step"] .deck{padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+
+/* 分段进度：12 步就 12 格，一眼知道"走到哪儿 / 还剩多少"，
+   比一条连续的细条更有"章节感"（连续条到了 12 步只剩每格 8% 的变化，看不出来） */
+html[data-fx="b"] .segs{display:flex;gap:3px;padding:0 12px 6px}
+html[data-fx="b"] .segs i{
+  flex:1;height:3px;border-radius:2px;background:rgba(120,120,130,.20);
+  transition:background .3s cubic-bezier(.2,.9,.3,1), transform .3s cubic-bezier(.2,1.2,.35,1);
+  transform-origin:center;
+}
+html[data-fx="b"] .segs i.on{background:var(--brand)}
+html[data-fx="b"] .segs i.cur{transform:scaleY(1.9)}
+html[data-fx="b"] .bar{display:none}          /* 有了分段就不要连续条了，两个一起是噪音 */
+html:not([data-fx="b"]) .segs{display:none}
+/* 矮屏原本把整条进度行藏掉省高度；分段条只有 3px，留着值 ——
+   把上下内边距压掉即可，代价 3px，换来的是"还剩几步"一直看得见 */
+@media (max-height:700px){
+  html[data-fx="b"] .topbar-progress{display:block;padding:0}
+  html[data-fx="b"] .segs{padding:0 12px 3px}
+}
+
+/* 尊重系统的"减弱动态效果"。这是无障碍要求，不是可选项 */
+@media (prefers-reduced-motion: reduce){
+  html[data-fx] *,
+  html[data-fx] *::before,
+  html[data-fx] *::after{
+    animation-duration:.01ms !important;animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+}

@@ -28,14 +28,27 @@
 
   let steps = [], cur = 0;
 
+  /* 观感层档位。默认 a（克制版）。
+     ?fx=b  更进一步（悬浮胶囊底栏 + 分段进度）
+     ?fx=off 完全关掉，退回最朴素的样子 —— 出对比图、以及万一线上出问题时的退路 */
+  const FX = (() => {
+    const q = new URLSearchParams(location.search).get('fx');
+    if (q === 'off' || q === '0') return '';
+    return (q === 'a' || q === 'b') ? q : 'a';
+  })();
+
   const mode = () => document.documentElement.dataset.mode;
   const setMode = m => {
     document.documentElement.dataset.mode = m;
     try { localStorage.setItem(MODE_KEY, m); } catch (e) { /* 隐私模式下会抛，忽略 */ }
     $('#modebtn').textContent = m === 'step' ? '☰ 长文' : '❯ 逐步';
     $('#modebtn').setAttribute('aria-label', m === 'step' ? '切换到长文模式' : '切换到逐步模式');
-    // 切模式时把「当前看到第几步」带过去
-    requestAnimationFrame(() => goto(cur, false));
+    /* 切模式时把「当前看到第几步」带过去。
+       ⚠️ 必须先确认页面已经渲染出来了：boot 里 setMode 跑在 render 之前，
+       这个 rAF 在本地/缓存命中时会晚于 render 执行，于是拿一个还没算准的 cur 去定位 ——
+       表现为长文模式**偶发"一进来就停在第 2 步"**（6 次里中 3~4 次）。
+       老毛病，2026-09-20 定位到。没渲染就不定位，render 自己会摆正。 */
+    if (steps.length) requestAnimationFrame(() => goto(cur, false));
   };
 
   /* ── 渲染 ─────────────────────────────────────────── */
@@ -62,16 +75,25 @@
       const say = el('div', 'say');
       const h = el('div', 'h');
       h.append(el('span', 'badge', String(i + 1)), el('h2', null, s.title || ''));
-      say.append(h, el('p', null, s.text || ''));
-
-      // 文字被裁时才出现「展开」提示；点整块文字都能展开（热区＝整块，不是一个小按钮）
-      const more = el('span', 'more', '展开全文 ⌄');
+      /* 正文和「更多」放在同一个定位容器里：「更多」叠在末行右端、背后垫一层渐隐，
+         **不占额外行高**。矮屏当初之所以把提示整个藏掉就是为了省高度，
+         用这种叠加式提示就没有那个取舍了（省略号只说明"被截了"，
+         说明不了"能点开"——用户反馈「不知道的还以为就这么多内容」）。 */
+      const txt = el('div', 'txt');
+      const para = el('p', null, s.text || '');
+      const more = el('span', 'more');
+      more.append(el('span', 'more-t', '更多'), el('i', 'chev'));
       more.hidden = true;
-      say.appendChild(more);
-      say.addEventListener('click', e => {
+      txt.append(para, more);
+      say.append(h, txt);
+
+      // 点整块文字都能展开（热区＝整块，不是一个小按钮）
+      say.addEventListener('click', () => {
         if (!say.classList.contains('can-open')) return;
-        const open = say.classList.toggle('open');
-        more.textContent = open ? '收起 ⌃' : '展开全文 ⌄';
+        animateOpen(say, () => {
+          const open = say.classList.toggle('open');
+          more.querySelector('.more-t').textContent = open ? '收起' : '更多';
+        });
       });
       page._more = more;
       page._say = say;
@@ -88,17 +110,58 @@
 
     $('#count').textContent = `1 / ${steps.length}`;
     buildStepsPanel().btn.querySelector('.sb-n').textContent = steps.length;
-    // 渲染完才知道哪几步真的被裁掉了（scrollHeight > clientHeight）
-    requestAnimationFrame(() => {
-      document.querySelectorAll('.page').forEach(p => {
-        const para = p.querySelector('.say p');
-        const cut = para.scrollHeight > para.clientHeight + 1;
-        if (p._more) p._more.hidden = !cut;
-        p._say.classList.toggle('can-open', cut);
-        if (cut) { p._say.setAttribute('role', 'button'); p._say.tabIndex = 0; }
-      });
-    });
+    // 空字符串也会命中 html[data-fx] 选择器，关掉必须把属性整个删掉
+    if (FX) document.documentElement.dataset.fx = FX;
+    else delete document.documentElement.dataset.fx;
+    requestAnimationFrame(() => { measureClamp(); parallax(); paintSegs(); playEnter(cur); });
+    /* 裁几行是跟视口高度走的（矮屏 3→2→1 行），所以转屏/改窗口后必须重量一次，
+       否则横过来明明放得下却还挂着「更多」，或者竖回去被裁了却没提示 */
+    let mt = 0;
+    const remeasure = () => { clearTimeout(mt); mt = setTimeout(measureClamp, 120); };
+    addEventListener('resize', remeasure);
+    addEventListener('orientationchange', remeasure);
     sync();
+  }
+
+  /* 判断正文有没有被裁。
+     不能只看 `scrollHeight > clientHeight`：那是 `-webkit-line-clamp` 下的实现细节，
+     各浏览器口径不一致，验不准。改成**临时取消裁剪量一次真实高度**再比 —— 谁都认。 */
+  function measureClamp() {
+    document.querySelectorAll('.page').forEach(p => {
+      const say = p._say, para = say && say.querySelector('.txt p');
+      if (!para) return;
+      if (say.classList.contains('open')) return;          // 已展开的不动
+      const shown = para.clientHeight;
+      para.classList.add('unclamp');
+      const full = para.scrollHeight;
+      para.classList.remove('unclamp');
+      const cut = full > shown + 1;
+      if (p._more) p._more.hidden = !cut;
+      say.classList.toggle('can-open', cut);
+      if (cut) { say.setAttribute('role', 'button'); say.tabIndex = 0; }
+      else { say.removeAttribute('role'); say.removeAttribute('tabindex'); }
+    });
+  }
+
+  /* 展开/收起要有过渡，不能"啪"地跳一下。
+     line-clamp 本身不可动画，所以量出改动前后的高度，拿显式高度过渡，完事再交还 auto。 */
+  function animateOpen(say, toggle) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { toggle(); return; }
+    const from = say.offsetHeight;
+    toggle();
+    const to = say.offsetHeight;
+    if (from === to) return;
+    say.style.height = from + 'px';
+    say.style.overflow = 'hidden';
+    void say.offsetHeight;                                  // 强制生效，否则浏览器会合并成一帧
+    say.style.transition = 'height .34s cubic-bezier(.22,1,.36,1)';
+    say.style.height = to + 'px';
+    const done = () => {
+      say.style.height = say.style.transition = say.style.overflow = '';
+      say.removeEventListener('transitionend', done);
+    };
+    say.addEventListener('transitionend', done);
+    setTimeout(done, 480);                                  // transitionend 偶尔不来，兜一手
   }
 
   /* ── 定位与进度 ───────────────────────────────────── */
@@ -113,6 +176,22 @@
     }
     cur = i;
     paint();
+    playEnter(i);
+  }
+
+  /* 播一次入场。只由 goto 和首屏调用 —— 手指滑动翻页不播，理由见 reader.css 的说明。
+     先摘类再强制一次布局，动画才会重新播（CSS 动画不摘类只播一次）。 */
+  function playEnter(i) {
+    if (reduceMotion() || !document.documentElement.dataset.fx) return;
+    const p = document.querySelector(`.page[data-i="${i}"]`);
+    if (!p) return;
+    p.classList.remove('enter');
+    void p.offsetWidth;
+    p.classList.add('enter');
+    clearTimeout(p._et);
+    // 播完把类摘掉，否则 animation-fill-mode:both 会把元素钉在终态，
+    // 以后改样式（比如展开正文）会莫名其妙不生效
+    p._et = setTimeout(() => p.classList.remove('enter'), 700);
   }
 
   function sync() {
@@ -132,6 +211,7 @@
     paint();
   }
 
+  let lastCur = -1;
   function paint() {
     markCurrentStep();
     syncFab();
@@ -140,6 +220,69 @@
     $('#fill').style.width = ((cur + 1) / n * 100) + '%';
     $('#prev').disabled = cur === 0;
     $('#next').disabled = cur === n - 1;
+
+    if (cur !== lastCur) {
+      lastCur = cur;
+      /* 给当前这一页打标记：序号徽章的弹入动画挂在 .is-cur 上。
+         先摘掉再加，动画才会重新播（不摘的话 CSS 动画只播一次） */
+      document.querySelectorAll('.page.is-cur').forEach(p => p.classList.remove('is-cur'));
+      const p = document.querySelector(`.page[data-i="${cur}"]`);
+      if (p) { void p.offsetWidth; p.classList.add('is-cur'); }
+      paintSegs();
+      /* 翻页给一下极轻的触感。**只有支持 Vibration API 的设备有**——
+         iOS Safari 至今不支持，iPhone 上这行等于没有，不要当成"已实现触感反馈" */
+      if (!reduceMotion() && navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
+    }
+  }
+
+  const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* 分段进度：一步一格。12 步时连续条每格只动 8%，肉眼看不出进展；分段能一眼看到"还剩几格" */
+  let segs = null;
+  function buildSegs() {
+    if (segs || !steps.length) return segs;
+    const host = document.querySelector('.topbar-progress');
+    if (!host) return null;
+    segs = el('div', 'segs');
+    steps.forEach(() => segs.appendChild(el('i')));
+    host.appendChild(segs);
+    return segs;
+  }
+  function paintSegs() {
+    const box = buildSegs();
+    if (!box) return;
+    [...box.children].forEach((x, i) => {
+      x.classList.toggle('on', i <= cur);
+      x.classList.toggle('cur', i === cur);
+    });
+  }
+
+  /* 翻页视差：图和说明卡都比页面挪得慢一点，形成前后层次；同时淡出。
+     只写 transform / opacity —— 这两个属性不触发重排，手指跟手才不会掉帧。
+
+     ⚠️ 位移只能走横向。最初写的是说明卡"下沉 14px"，结果把它顶出了页面框，
+     而 .deck 是 overflow-y:hidden —— 滑动过程中说明卡会被切掉一截（verify.js 的
+     inPage 断言抓到的就是这个，不是误报）。横向位移没有这个问题。
+
+     18px ≈ 390 宽的 4.6%：再小看不出来，再大图就跟页面"脱层"了。
+     说明卡取 8px，比图慢一档，这样图在前、字在后，层次才分得开。 */
+  const IMG_SHIFT = 18, SAY_SHIFT = 8, SAY_FADE = .7;
+  function parallax() {
+    const root = document.documentElement;
+    if (!root.dataset.fx || root.dataset.mode !== 'step' || reduceMotion()) return;
+    const deck = $('#deck');
+    const w = deck.clientWidth || 1;
+    document.querySelectorAll('.page').forEach(p => {
+      const t = Math.max(-1.2, Math.min(1.2, (p.offsetLeft - deck.scrollLeft) / w));
+      const a = Math.abs(t);
+      const img = p.querySelector('.shot img');
+      const say = p._say;
+      if (img) img.style.transform = `translate3d(${(-t * IMG_SHIFT).toFixed(2)}px,0,0)`;
+      if (say) {
+        say.style.transform = `translate3d(${(-t * SAY_SHIFT).toFixed(2)}px,0,0)`;
+        say.style.opacity = String(Math.max(0, 1 - a * SAY_FADE));
+      }
+    });
   }
 
   /* ── 回到顶部的悬浮键（只在长文模式、滚远了才出现） ── */
@@ -310,7 +453,7 @@
     const onScroll = () => {
       if (tick) return;
       tick = true;
-      requestAnimationFrame(() => { sync(); tick = false; });
+      requestAnimationFrame(() => { sync(); parallax(); tick = false; });
     };
     $('#deck').addEventListener('scroll', onScroll, { passive: true });
     addEventListener('scroll', onScroll, { passive: true });

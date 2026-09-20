@@ -9,6 +9,9 @@
   --brand:#5B57D8;
   --line:rgba(60,60,67,.14);
   --shot-bg:#FFFFFF;    /* 截图垫底：深浅两套都是白，浅色截图贴深色背景会晃眼 */
+  /* 顶/底栏的半透明底色。.72 是权衡出来的：再透文字对比度就掉了，再实就看不出材质 */
+  --bar:rgba(242,242,247,.72);
+  --pill:rgba(91,87,216,.10);   /* 顶栏胶囊底色，跟 --brand 同色系但压得很淡 */
   --radius:16px;
   --tap:48px;           /* 触摸目标下限，>= Apple HIG 的 44 */
 }
@@ -22,11 +25,15 @@
     --brand:#8B87FF;
     --line:rgba(255,255,255,.14);
     --shot-bg:#FFFFFF;
+    --bar:rgba(17,17,20,.72);
+    --pill:rgba(139,135,255,.16);   /* 深色底上要稍重一点才看得见 */
   }
 }
 :root[data-theme="dark"]{
   --bg:#111114; --card:#1C1C20; --ink:#F2F2F5; --ink2:#D8D8DE;
   --muted:#9B9BA3; --brand:#8B87FF; --line:rgba(255,255,255,.14); --shot-bg:#FFFFFF;
+  --bar:rgba(17,17,20,.72);
+  --pill:rgba(139,135,255,.16);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}

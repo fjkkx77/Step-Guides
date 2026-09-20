@@ -15,7 +15,8 @@ http.createServer((q,s)=>{
     return;
   }
   // 目录 -> index.html（GitHub Pages 就是这个行为，本地必须一致，否则测的跟线上不是一回事）
-  let rel=u.pathname;
+  // URL 里的中文会被百分号编码，不解码就跟真实文件名对不上（存档区全是中文目录名，必踩）
+  let rel; try{ rel=decodeURIComponent(u.pathname); }catch(e){ rel=u.pathname; }
   let f=path.join(ROOT,rel==='/'?'index.html':rel);
   try{ if(fs.existsSync(f)&&fs.statSync(f).isDirectory()) f=path.join(f,'index.html'); }catch(_){}
   if(rel.endsWith('/')&&!f.endsWith('index.html')) f=path.join(f,'index.html');
