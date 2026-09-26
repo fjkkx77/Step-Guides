@@ -49,12 +49,65 @@
        表现为长文模式**偶发"一进来就停在第 2 步"**（6 次里中 3~4 次）。
        老毛病，2026-09-20 定位到。没渲染就不定位，render 自己会摆正。 */
     if (steps.length) requestAnimationFrame(() => goto(cur, false));
+    /* 切回逐步模式必须重量一次「正文有没有被裁」。
+       长文模式下正文不裁（line-clamp 只挂在 step 上），这时量出来全是"没被裁"；
+       上次停在长文模式 → 打开教程 → 切回逐步，文字被裁出了省略号，「更多」却一个都不显示。
+       表现为**偶发**：取决于上次离开时停在哪个模式（记在 localStorage 里）。2026-09-26 定位 */
+    if (m === 'step' && steps.length) requestAnimationFrame(measureClamp);
+    closeTitlePop();
   };
+
+  /* ── 点标题看完整标题 ─────────────────────────────────
+     窄屏标题会被省略号截断。点一下在顶栏下方浮出一张卡片显示全文，
+     **浮层不挤版面**：顶栏要是自己长高，逐步模式里截图会跟着缩一下再弹回来，很晃。
+     没被截断时点标题什么也不做。点任意处 / 翻页 / 转屏 / Esc 都会收起 */
+  let titlePop = null;
+  const titleCut = () => { const h = $('#title'); return !!h && h.scrollWidth > h.clientWidth + 1; };
+  function openTitlePop() {
+    const top = $('.top');
+    if (!top) return;
+    titlePop = el('div', 'title-pop', $('#title').textContent);
+    titlePop.setAttribute('role', 'status');
+    titlePop.style.top = Math.round(top.getBoundingClientRect().bottom + 6) + 'px';
+    document.body.appendChild(titlePop);
+    $('#title').setAttribute('aria-expanded', 'true');
+  }
+  function closeTitlePop() {
+    if (!titlePop) return;
+    titlePop.remove();
+    titlePop = null;
+    const h = $('#title');
+    if (h) h.setAttribute('aria-expanded', 'false');
+  }
+  function wireTitle() {
+    const h = $('#title');
+    if (!h) return;
+    const sync = () => {                 // 只有真被截断时才像个按钮
+      const cut = titleCut();
+      h.classList.toggle('is-cut', cut);
+      if (cut) { h.setAttribute('role', 'button'); h.tabIndex = 0; h.title = h.textContent; }
+      else { h.removeAttribute('role'); h.removeAttribute('tabindex'); h.removeAttribute('title'); }
+    };
+    h._sync = sync;
+    h.addEventListener('click', e => {
+      if (titlePop) { closeTitlePop(); return; }
+      if (!titleCut()) return;
+      e.stopPropagation();
+      openTitlePop();
+    });
+    h.addEventListener('keydown', e => {
+      if ((e.key === 'Enter' || e.key === ' ') && h.getAttribute('role') === 'button') { e.preventDefault(); h.click(); }
+    });
+    // 捕获阶段：点到别处先收起浮层（点标题本身由上面的 click 自己切换）
+    addEventListener('pointerdown', e => { if (titlePop && e.target !== h) closeTitlePop(); }, true);
+    addEventListener('resize', () => { closeTitlePop(); sync(); });
+  }
 
   /* ── 渲染 ─────────────────────────────────────────── */
   function render(data) {
     document.title = data.title;
     $('#title').textContent = data.title;
+    requestAnimationFrame(() => $('#title')._sync && $('#title')._sync());
     steps = data.steps;
 
     const deck = $('#deck');
@@ -455,6 +508,7 @@
 
   function boot() {
     liftCount();
+    wireTitle();
     let saved = 'step';
     try { saved = localStorage.getItem(MODE_KEY) || 'step'; } catch (e) { /* 忽略 */ }
     setMode(saved === 'long' ? 'long' : 'step');
@@ -467,12 +521,14 @@
     const onScroll = () => {
       if (tick) return;
       tick = true;
+      closeTitlePop();
       requestAnimationFrame(() => { sync(); parallax(); tick = false; });
     };
     $('#deck').addEventListener('scroll', onScroll, { passive: true });
     addEventListener('scroll', onScroll, { passive: true });
 
     addEventListener('keydown', e => {
+      if (e.key === 'Escape' && titlePop) { closeTitlePop(); return; }
       if (e.key === 'Escape' && panel && !panel.mask.hidden) { closeSteps(); return; }
       if ($('#zoom') && $('#zoom').open) return;
       if ((e.key === 'Enter' || e.key === ' ') && document.activeElement?.classList.contains('say')) {
