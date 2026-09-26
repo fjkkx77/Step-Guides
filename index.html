@@ -9,29 +9,124 @@
 <title>图文教程</title>
 <link rel="stylesheet" href="assets/base.css">
 <style>
-  body{display:flex;flex-direction:column;justify-content:center;min-height:100dvh;padding:24px 18px}
-  .wrap{max-width:420px;margin:0 auto;width:100%}
-  h1{font-size:24px;margin:0 0 6px}
-  p{color:var(--muted);font-size:15px;line-height:1.75;margin:0 0 22px}
-  a.big{
-    display:flex;align-items:center;justify-content:space-between;
-    height:var(--tap);padding:0 16px;margin-bottom:10px;border-radius:14px;
-    background:var(--card);border:1px solid var(--line);color:var(--ink);
-    text-decoration:none;font-size:17px;
+  /* 2026-09-26 改版：内容与结构沿用原版（标题/介绍/三个入口/隐私提示），只改两件事——
+     ① 按钮更醒目：主按钮做成实心大按钮，另两个入口带彩色图标和说明
+     ② 按 Apple 的排版：iOS 大标题 + 「设置」App 那种圆角分组列表（inset grouped），提示放在分组下当脚注 */
+  body{
+    display:flex;flex-direction:column;justify-content:center;min-height:100dvh;
+    padding:calc(28px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
   }
-  a.big.go{background:var(--brand);color:#fff;border-color:transparent;font-weight:600}
-  .tip{font-size:13px;color:var(--muted);line-height:1.8;margin-top:18px}
+  .wrap{max-width:520px;margin:0 auto;width:100%}
+
+  /* 大标题：iOS Large Title 是 34pt Bold；宽屏再放大一点 */
+  .app{
+    width:64px;height:64px;border-radius:15px;margin-bottom:18px;
+    display:grid;place-items:center;color:#fff;
+    background:linear-gradient(145deg,#7A76F0,var(--brand) 55%,#4540C4);
+    box-shadow:0 8px 20px rgba(91,87,216,.30), inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  .app svg{width:34px;height:34px}
+  h1{margin:0 0 8px;font-size:clamp(34px,6vw,40px);line-height:1.15;font-weight:700;letter-spacing:.2px}
+  .lead{margin:0 0 28px;color:var(--ink2);font-size:17px;line-height:1.7}
+
+  /* 主按钮：Apple 的 prominent 按钮——实心、圆角、整行宽 */
+  .primary{
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    height:56px;border-radius:14px;margin-bottom:22px;
+    background:var(--brand);color:#fff;text-decoration:none;
+    font-size:18px;font-weight:600;
+    box-shadow:0 8px 22px rgba(91,87,216,.30);
+    transition:transform .16s cubic-bezier(.34,1.56,.64,1), box-shadow .16s ease, filter .16s ease;
+  }
+  .primary svg{width:22px;height:22px}
+  .primary:active{transform:scale(.97);filter:brightness(.95)}
+  @media (hover:hover){ .primary:hover{box-shadow:0 12px 28px rgba(91,87,216,.40);filter:brightness(1.05)} }
+
+  /* 分组列表：跟 iOS「设置」一样——白底圆角卡、左侧彩色圆角图标、分隔线从文字处开始、右侧灰色箭头 */
+  .group{background:var(--card);border-radius:14px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .row{
+    display:flex;align-items:center;gap:14px;min-height:72px;padding:12px 16px;
+    color:var(--ink);text-decoration:none;position:relative;
+    transition:background-color .15s ease;
+  }
+  .row + .row::before{content:"";position:absolute;top:0;right:0;left:66px;height:1px;background:var(--line)}
+  .row:active{background:rgba(120,120,130,.16)}
+  @media (hover:hover){ .row:hover{background:rgba(120,120,130,.08)} }
+  .ico{flex:0 0 auto;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:#fff}
+  .ico svg{width:21px;height:21px}
+  .ico.blue{background:linear-gradient(180deg,#4DA3FF,#0A7AFF)}
+  .ico.orange{background:linear-gradient(180deg,#FFB340,#FF8A00)}
+  .txt{flex:1;min-width:0}
+  .txt b{display:block;font-size:17px;font-weight:600;line-height:1.35}
+  .txt span{display:block;margin-top:2px;font-size:14px;color:var(--muted);line-height:1.45}
+  .chev{flex:0 0 auto;width:9px;height:15px;color:rgba(60,60,67,.3)}
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .chev{color:rgba(235,235,245,.3)} }
+  :root[data-theme="dark"] .chev{color:rgba(235,235,245,.3)}
+
+  /* 分组脚注：iOS 表格分组下方的小字说明 */
+  .foot{display:flex;gap:8px;margin:10px 16px 0;font-size:13px;color:var(--muted);line-height:1.7}
+  .foot svg{flex:0 0 auto;width:14px;height:14px;margin-top:4px}
+
+  /* 电脑：栏宽和字号跟着放大一档，不让大屏上显得局促 */
+  @media (min-width:900px){
+    .wrap{max-width:620px}         /* 介绍那句 33 字 × 18px ≈ 594px：620 能一行放下，580 会剩「做。」孤字 */
+    h1{font-size:44px}
+    .lead{font-size:18px}
+    .primary{height:60px;font-size:19px}
+    .row{min-height:78px}
+  }
+  /* 矮屏（320×568 这类）：一屏放下全部内容，只压间距和图标，不换版式 */
+  @media (max-height:640px){
+    body{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+    .app{width:52px;height:52px;border-radius:12px;margin-bottom:12px}
+    .app svg{width:28px;height:28px}
+    h1{font-size:30px;margin-bottom:6px}
+    .lead{font-size:16px;margin-bottom:18px}
+    .primary{margin-bottom:14px}
+    .row{min-height:64px;padding-top:9px;padding-bottom:9px}
+  }
+
+  @media (prefers-reduced-motion: reduce){ .primary,.row{transition:none} }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div class="app" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="2.5" width="12" height="19" rx="2.6"/><path d="M9.5 7.5h5M9.5 11h5M9.5 14.5h3"/></svg>
+  </div>
   <h1>图文教程</h1>
-  <p>把截图和说明写成一步一屏的教程，发一条链接给对方，点开就能跟着做。</p>
-  <a class="big go" href="w/">写一份新教程 <span>›</span></a>
-  <a class="big" href="mine/">我发布过的教程 <span>›</span></a>
-  <a class="big" href="t/qhftq5kz/">看个例子 <span>›</span></a>
-  <p class="tip">教程链接是随机字符串，猜不到、也不会被搜索引擎收录；
-     但拿到链接的人都能看，所以别放真正敏感的东西。</p>
+  <p class="lead">把截图和说明写成一步一屏的教程，发一条链接给对方，点开就能跟着做。</p>
+
+  <a class="primary" href="w/">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    写一份新教程
+  </a>
+
+  <nav class="group" aria-label="更多入口">
+    <a class="row" href="mine/">
+      <span class="ico blue" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>
+      </span>
+      <span class="txt"><b>我发布过的教程</b><span>打开、复制链接、编辑</span></span>
+      <svg class="chev" viewBox="0 0 9 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 1.5l6 6-6 6"/></svg>
+    </a>
+    <a class="row" href="t/qhftq5kz/">
+      <span class="ico orange" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
+      </span>
+      <span class="txt"><b>看个例子</b><span>iPhone 专注模式 · 12 步</span></span>
+      <svg class="chev" viewBox="0 0 9 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 1.5l6 6-6 6"/></svg>
+    </a>
+  </nav>
+
+  <p class="foot">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <span>教程链接是随机字符串，猜不到、也不会被搜索引擎收录；但拿到链接的人都能看，所以别放真正敏感的东西。</span>
+  </p>
 </div>
 </body>
 </html>

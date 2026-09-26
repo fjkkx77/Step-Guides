@@ -25,6 +25,62 @@ body{display:flex;flex-direction:column;min-height:100dvh}
   font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums;white-space:nowrap;
 }
 .top .count + *{margin-left:auto}
+/* 返回键：iOS 导航栏左上角那种，一个大 ‹ 就够了，热区 44×44 */
+.backbtn{
+  flex:0 0 auto;width:var(--tap);height:var(--tap);margin-left:-8px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:30px;line-height:1;color:var(--brand);padding-bottom:3px;
+}
+/* 底栏「回到第一步」：跟两个大按钮同高的小方键 */
+.bottom .firstbtn{
+  flex:0 0 var(--tap);width:var(--tap);padding:0;font-size:15px;color:var(--brand);
+}
+.bottom .firstbtn:disabled{color:var(--muted);opacity:.45}
+@media (max-height:700px){ .bottom .firstbtn{height:44px} }
+/* 最后一步的「从头再看」 */
+/* 最后一步的「从头再看」：逐步模式由底栏的「下一步」兼任（见 reader.js paint），
+   卡片里这个只在长文模式出现——长文模式没有"一屏放下"的高度压力 */
+.done .again{display:none}
+html[data-mode="long"] .done .again{
+  display:flex;align-items:center;justify-content:center;width:max-content;height:var(--tap);
+  margin:10px auto 0;padding:0 18px;border-radius:22px;
+  background:rgba(91,87,216,.10);color:var(--brand);font-size:15px;font-weight:600;
+}
+.bottom #next.restart{color:var(--brand);font-weight:600}
+
+/* ── 电脑两侧翻页区 ───────────────────────────────────
+   宽屏 + 逐步模式才出现。页面内容往中间收 --side，两侧留出的空白整条都是热区。
+   --side 用 vw 跟着屏宽走、两头夹住：900 宽时 88px，1707 宽时约 170px，再宽封顶 220px */
+.side-nav{display:none}
+@media (min-width:900px){
+  html[data-mode="step"]{--side:clamp(88px, 10vw, 220px)}
+  html[data-mode="step"] .page{padding-left:var(--side);padding-right:var(--side)}
+  html[data-mode="step"] .side-nav{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;z-index:15;width:var(--side);
+    top:var(--side-top, 64px);bottom:var(--side-bottom, 64px);
+    background:transparent;border:0;border-radius:0;color:var(--ink);cursor:pointer;
+    transition:background-color .18s ease;
+  }
+  html[data-mode="step"] .side-prev{left:0}
+  html[data-mode="step"] .side-next{right:0}
+  .side-nav .side-ico{
+    width:56px;height:56px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;padding-bottom:4px;
+    font-size:34px;line-height:1;color:var(--ink);
+    background:var(--card);border:1px solid var(--line);
+    box-shadow:0 2px 10px rgba(0,0,0,.08);
+    opacity:.7;transition:opacity .18s ease, transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s ease;
+  }
+  .side-nav:hover:not(:disabled){background:rgba(120,120,130,.07)}
+  .side-nav:hover:not(:disabled) .side-ico{opacity:1;transform:scale(1.08);box-shadow:0 6px 18px rgba(0,0,0,.14)}
+  .side-nav:active:not(:disabled) .side-ico{transform:scale(.94)}
+  .side-nav:disabled{cursor:default}
+  .side-nav:disabled .side-ico{opacity:0}
+  .side-nav:focus-visible .side-ico{outline:2px solid var(--brand);outline-offset:3px}
+}
+@media (prefers-reduced-motion: reduce){ .side-nav,.side-nav .side-ico{transition:none} }
+
 /* 标题被截断时可以点开看全文（reader.js wireTitle）。没截断就是普通文字 */
 .top h1.is-cut{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .top h1.is-cut:active{opacity:.6}

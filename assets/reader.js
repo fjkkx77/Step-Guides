@@ -54,6 +54,7 @@
        上次停在长文模式 → 打开教程 → 切回逐步，文字被裁出了省略号，「更多」却一个都不显示。
        表现为**偶发**：取决于上次离开时停在哪个模式（记在 localStorage 里）。2026-09-26 定位 */
     if (m === 'step' && steps.length) requestAnimationFrame(measureClamp);
+    if (addSides.fit) requestAnimationFrame(addSides.fit);
     closeTitlePop();
   };
 
@@ -154,6 +155,11 @@
       if (i === steps.length - 1) {
         const done = el('div', 'done');
         done.append(el('b', null, '做完啦 🎉 '), el('span', null, '有不明白的随时问我'));
+        const again = el('button', 'again tap', '↺ 从头再看');
+        again.type = 'button';
+        // 别让这一下冒泡到 .say（那会触发"展开/收起正文"）
+        again.addEventListener('click', e => { e.stopPropagation(); goto(0); });
+        done.appendChild(again);
         say.appendChild(done);
       }
 
@@ -166,7 +172,7 @@
     // 空字符串也会命中 html[data-fx] 选择器，关掉必须把属性整个删掉
     if (FX) document.documentElement.dataset.fx = FX;
     else delete document.documentElement.dataset.fx;
-    requestAnimationFrame(() => { measureClamp(); parallax(); paintSegs(); playEnter(cur); });
+    requestAnimationFrame(() => { measureClamp(); parallax(); paintSegs(); playEnter(cur); if (addSides.fit) addSides.fit(); });
     /* 裁几行是跟视口高度走的（矮屏 3→2→1 行），所以转屏/改窗口后必须重量一次，
        否则横过来明明放得下却还挂着「更多」，或者竖回去被裁了却没提示 */
     let mt = 0;
@@ -272,7 +278,17 @@
     $('#count').textContent = `${cur + 1} / ${n}`;
     $('#fill').style.width = ((cur + 1) / n * 100) + '%';
     $('#prev').disabled = cur === 0;
-    $('#next').disabled = cur === n - 1;
+    /* 最后一步：「下一步」不再置灰，而是变成「↺ 从头再看」——走到终点时主按钮换成终点动作，
+       不占任何额外高度（在说明卡里另加按钮会把矮屏最后一步的截图挤窄，回归测试抓到过） */
+    const atEnd = cur === n - 1 && n > 1;
+    $('#next').disabled = n <= 1;
+    $('#next').classList.toggle('restart', atEnd);
+    $('#next').textContent = atEnd ? '↺ 从头再看' : '下一步 ›';
+    const fb = $('#firstbtn');
+    if (fb) fb.disabled = cur === 0;
+    const sp = $('.side-prev'), sn = $('.side-next');
+    if (sp) sp.disabled = cur === 0;
+    if (sn) sn.disabled = cur === n - 1;
 
     if (cur !== lastCur) {
       lastCur = cur;
@@ -506,8 +522,77 @@
     h.after(c);
   }
 
+  /* 能不能"回到站里"：导出的单文件、写作页里的预览都是自包含的，没有站可回，不给返回键 */
+  const inSite = () => !window.__DATA && /^https?:$/.test(location.protocol);
+
+  /* ── 返回键（iOS 导航栏左上角那个 ‹） ──────────────
+     从站内点进来的（教程库、首页）→ 回到来的地方；
+     别人从聊天里直接点链接打开的（没有站内上一页）→ 回首页 */
+  function addBack() {
+    const top = $('.top'), h = $('#title');
+    if (!top || !h || !inSite() || $('#backbtn')) return;
+    const b = el('button', 'backbtn tap', '‹');
+    b.id = 'backbtn';
+    b.type = 'button';
+    b.setAttribute('aria-label', '返回');
+    b.addEventListener('click', () => {
+      let same = false;
+      try { same = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch (e) {}
+      if (same && history.length > 1) history.back();
+      else location.href = new URL('../../', location.href).href;
+    });
+    top.insertBefore(b, h);
+  }
+
+  /* ── 回到第一步 ─────────────────────────────────────
+     底栏「上一步」左边一个小方键；第 1 步时置灰（不隐藏：隐藏会让两个大按钮跟着变宽变窄地跳） */
+  function addFirst() {
+    const prev = $('#prev');
+    if (!prev || $('#firstbtn')) return;
+    const b = el('button', 'firstbtn tap', '⏮');
+    b.id = 'firstbtn';
+    b.type = 'button';
+    b.setAttribute('aria-label', '回到第一步');
+    b.title = '回到第一步';
+    b.addEventListener('click', () => goto(0));
+    prev.parentNode.insertBefore(b, prev);
+  }
+
+  /* ── 电脑两侧的翻页区（照 Mac「照片」：左右两侧整条都能点，中间一个大圆箭头）──
+     大屏两边本来就是空白，拿来做热区：整条侧栏都算，点偏了也能翻。
+     只在宽屏 + 逐步模式出现（CSS 控制），窄屏的左右滑动不受影响 */
+  function addSides() {
+    if ($('.side-nav')) return;
+    const mk = (dir, label, arrow) => {
+      const b = el('button', 'side-nav side-' + dir + ' tap');
+      b.type = 'button';
+      b.setAttribute('aria-label', label);
+      b.title = label;
+      b.appendChild(el('span', 'side-ico', arrow));
+      b.addEventListener('click', () => goto(cur + (dir === 'prev' ? -1 : 1)));
+      document.body.appendChild(b);
+      return b;
+    };
+    mk('prev', '上一步', '‹');
+    mk('next', '下一步', '›');
+    // 热区只盖住中间的内容区（量 .deck 的实际上下沿），不压在顶栏/底栏上
+    const fit = () => {
+      const d = $('#deck');
+      if (!d) return;
+      const r = d.getBoundingClientRect();
+      document.documentElement.style.setProperty('--side-top', Math.round(r.top) + 'px');
+      document.documentElement.style.setProperty('--side-bottom', Math.round(innerHeight - r.bottom) + 'px');
+    };
+    addSides.fit = fit;
+    addEventListener('resize', fit);
+    fit();
+  }
+
   function boot() {
     liftCount();
+    addBack();
+    addFirst();
+    addSides();
     wireTitle();
     let saved = 'step';
     try { saved = localStorage.getItem(MODE_KEY) || 'step'; } catch (e) { /* 忽略 */ }
@@ -515,7 +600,7 @@
 
     $('#modebtn').addEventListener('click', () => setMode(mode() === 'step' ? 'long' : 'step'));
     $('#prev').addEventListener('click', () => goto(cur - 1));
-    $('#next').addEventListener('click', () => goto(cur + 1));
+    $('#next').addEventListener('click', () => goto(cur >= steps.length - 1 ? 0 : cur + 1));
 
     let tick = false;
     const onScroll = () => {
@@ -536,6 +621,8 @@
       }
       if (e.key === 'ArrowRight') goto(cur + 1);
       if (e.key === 'ArrowLeft') goto(cur - 1);
+      if (e.key === 'Home' && mode() === 'step') goto(0);
+      if (e.key === 'End' && mode() === 'step') goto(steps.length - 1);
     });
 
     // 放大后要能按住拖动，所以不能再"点图以外任何地方就关"——

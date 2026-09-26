@@ -456,16 +456,33 @@
       const row = $('#p-row');
       row.hidden = false;
       row.innerHTML = `<a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+      /* 发完就离开编辑器（照"发送后回到列表/内容本身"的通行做法）：
+         以前点「完成」只关弹窗，人还留在写作页，面对一份已经发出去、草稿也已清掉的内容，不知道下一步干嘛。
+         现在：主按钮去看刚发的教程；「我的教程」或随便怎么关掉弹窗，都回教程库并高亮这一份。
+         都用 replace：浏览器返回时不会再退回这个过期的写作页 */
+      const canShare = !!navigator.share;
       const btns = document.createElement('div');
       btns.className = 'row';
-      btns.innerHTML = `<button class="tap" id="p-copy" type="button">复制链接</button>
-                        <button class="tap go" id="p-close" type="button">完成</button>`;
-      row.appendChild(btns);
+      btns.innerHTML = `<button class="tap" id="p-copy" type="button">复制链接</button>` +
+        (canShare ? `<button class="tap" id="p-share" type="button">分享…</button>` : '');
+      const btns2 = document.createElement('div');
+      btns2.className = 'row';
+      btns2.innerHTML = `<button class="tap" id="p-mine" type="button">📚 我的教程</button>
+                         <button class="tap go" id="p-open" type="button">查看教程 ›</button>`;
+      row.append(btns, btns2);
       $('#p-copy').onclick = async () => {
         try { await navigator.clipboard.writeText(url); $('#p-copy').textContent = '已复制 ✓'; }
         catch (e) { prompt('手动复制这条链接：', url); }
       };
-      $('#p-close').onclick = () => dlg.close();
+      // iPhone 上会弹出系统分享面板，可以直接发到微信
+      if (canShare) $('#p-share').onclick = () =>
+        navigator.share({ title: data.title, url }).catch(() => { /* 用户取消分享不算错 */ });
+      let going = false;
+      const go = to => { going = true; location.replace(to); };
+      $('#p-open').onclick = () => go(url);
+      $('#p-mine').onclick = () => go(`../mine/?new=${encodeURIComponent(id)}`);
+      // Esc / 返回键关掉弹窗也一样去教程库，不把人留在过期的写作页
+      dlg.addEventListener('close', () => { if (!going) go(`../mine/?new=${encodeURIComponent(id)}`); }, { once: true });
 
     } catch (err) {
       progress('发布失败', '', 0);

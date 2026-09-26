@@ -17,6 +17,12 @@
   }
   .card h2{margin:0 0 2px;font-size:17px;font-weight:600;line-height:1.4}
   .card .meta{font-size:13px;color:var(--muted)}
+  /* 刚发布完跳过来的那一份：描一圈品牌色，闪两下，一眼能找到 */
+  .card.fresh{border-color:var(--brand);box-shadow:0 0 0 3px rgba(91,87,216,.18);animation:fresh 1.2s ease 2}
+  .card .newtag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;font-size:12px;
+    font-weight:600;color:#fff;background:var(--brand);vertical-align:2px}
+  @keyframes fresh{50%{box-shadow:0 0 0 7px rgba(91,87,216,.08)}}
+  @media (prefers-reduced-motion: reduce){ .card.fresh{animation:none} }
   .card .ops{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
   .card .ops button,.card .ops a{
     height:44px;padding:0 14px;border-radius:10px;font-size:15px;
@@ -86,6 +92,20 @@
       return;
     }
     render();
+    markFresh();
+  }
+
+  /** 从写作页发布完跳过来会带 ?new=<id>：把那一份标出来并滚到眼前，然后抹掉参数（刷新不再重复） */
+  function markFresh() {
+    const id = new URLSearchParams(location.search).get('new');
+    if (!id) return;
+    history.replaceState(null, '', location.pathname);
+    const card = [...list.querySelectorAll('.card')].find(c => c.dataset.id === id);
+    if (!card) return;
+    card.classList.add('fresh');
+    const h = card.querySelector('h2');
+    if (h) h.insertAdjacentHTML('beforeend', '<span class="newtag">刚发布</span>');
+    card.scrollIntoView({ block: 'center' });
   }
 
   function render() {
