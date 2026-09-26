@@ -306,12 +306,9 @@
     if (!dlg.querySelector('.zbar')) {                 // 补出工具栏（跟阅读页同款）
       const bar = document.createElement('div');
       bar.className = 'zbar';
-      bar.innerHTML = '<span class="zpct">100%</span>' +
-        '<button class="zreset" type="button">还原</button>' +
-        '<button class="zclose" type="button">✕ 关闭</button>';
+      bar.innerHTML = window.SGZoomBar;                // 跟阅读页同一份（zoom.js 里定义）
       dlg.appendChild(bar);
       bar.querySelector('.zclose').onclick = () => dlg.close();
-      bar.querySelector('.zreset').onclick = () => zoomer && zoomer.reset();
     }
     if (!zoomer) zoomer = window.SGZoom.mount(dlg);
     zoomer.open(src, alt);

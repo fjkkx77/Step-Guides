@@ -26,7 +26,6 @@
   const TAP_MS = 500;        // 按下到抬起多久之内算"点"。260 太严：手指按一下停顿再抬
                              // 就判不成点了（自动化里两次往返也会超）。500 仍远低于长按
   const DBL_MS = 300;        // 两次点击间隔在这之内算双击
-  const CHROME_MS = 3000;    // 刚打开时工具栏停留多久再自动淡出（只有这一次是自动的）
   const DISMISS_AT = 110;    // 下滑多少距离就关闭
   const FLING = 0.55;        // 甩动速度阈值 px/ms（参考自己的手势配方，慢拉不关、快甩就关）
 
@@ -192,16 +191,15 @@
 
     const reset = () => { stopGlide(); dismiss = null; dy = 0; animate(() => { scale = 1; tx = ty = 0; }); };
 
-    /* ── 工具栏自动隐藏 ─────────────────────────── */
-    /** auto=true 才会自动淡出。用户主动唤回的（点一下画面）就一直留着，
-        等他再点一下才收 —— 自动收会出现"还没来得及点就没了"（用户反馈） */
-    function showChrome(auto) {
+    /* ── 控件显示/隐藏：照 iPhone「照片」 ──────────
+       Apple 官方说明：「轻点照片隐藏屏幕上的控件，再轻点一次显示」——不会自己消失。
+       隐藏时背景转成纯黑（沉浸看图），显示时背景跟系统外观走（浅色白 / 深色黑），见 zoom.css */
+    function showChrome() {
       dlg.classList.remove('chrome-off');
       clearTimeout(chromeTimer);
-      if (auto) chromeTimer = setTimeout(() => dlg.classList.add('chrome-off'), CHROME_MS);
     }
     const toggleChrome = () => {
-      if (dlg.classList.contains('chrome-off')) showChrome(false);   // 点出来的就别再自动收
+      if (dlg.classList.contains('chrome-off')) showChrome();
       else { clearTimeout(chromeTimer); dlg.classList.add('chrome-off'); }
     };
 
@@ -218,7 +216,7 @@
       paint();
       clearTimeout(box._wheelEnd);
       box._wheelEnd = setTimeout(() => gpu(false), 160);   // 停下来就摘掉，画面回到清晰
-      showChrome(true);
+      showChrome();
     }, { passive: false });
 
     box.addEventListener('dblclick', e => {
@@ -234,7 +232,7 @@
     let lastTouchAt = 0;
     const ghost = () => Date.now() - lastTouchAt < 700;
 
-    box.addEventListener('mousemove', () => { if (!ghost()) showChrome(true); });
+    box.addEventListener('mousemove', () => { if (!ghost()) showChrome(); });
 
     /* ── 指针事件：一套覆盖鼠标和触摸 ───────────── */
     box.addEventListener('pointerdown', e => {
@@ -405,16 +403,24 @@
         stopGlide();
         img.src = src;
         img.alt = alt || '';
+        // 顶部标题：「第 3 步的截图」→「第 3 步」（照片在这个位置显示拍摄时间）
+        const t = dlg.querySelector('.ztitle');
+        if (t) { t.textContent = (alt || '').replace(/的(截)?图$/, ''); t.hidden = !t.textContent; }
         scale = 1; tx = ty = 0; dy = 0; dismiss = null; pinch = null; pts.clear();
         raw = null; samples = [];
         img.classList.remove('zanim');
         paint();
         if (!dlg.open) dlg.showModal();
-        showChrome(true);                          // 开场露一下工具栏，随后自动淡出
+        showChrome();                              // 打开时显示控件，轻点画面才隐藏（照片的做法）
       },
       reset
     };
   }
 
   window.SGZoom = { mount };
+  /* 顶栏标记：左上角返回键 + 居中标题 + 右侧占位（让标题真正居中）。阅读页 reader.js 里有同一份 */
+  window.SGZoomBar = '<button class="zclose" type="button" aria-label="关闭">' +
+    '<svg viewBox="0 0 12 20" width="12" height="20" fill="none" stroke="currentColor" stroke-width="2.6" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2L2 10l8 8"/></svg></button>' +
+    '<span class="ztitle"></span><span class="zspacer" aria-hidden="true"></span>';
 })();

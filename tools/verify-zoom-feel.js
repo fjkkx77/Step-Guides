@@ -59,7 +59,15 @@ const LIB = `(() => {
     await sleep(300);
     await c.ev(`window.__Z = ${LIB}`);
     const run = async body => JSON.parse(await c.ev(`(async () => { const Z = window.__Z; ${body} })().then(JSON.stringify)`));
-    const resetZ = () => c.ev(`(async () => { document.querySelector('#zoom .zreset') && document.querySelector('#zoom .zreset').click(); await new Promise(r => setTimeout(r, 400)); })()`);
+    // 复位：没有还原键了（2026-09-26 照「照片」去掉），放大状态下双击＝复原
+    const resetZ = () => c.ev(`(async () => {
+      const m = /matrix\\(([^,]+)/.exec(getComputedStyle(document.getElementById('zoomimg')).transform || '');
+      if (m && +m[1] > 1.01) {
+        const b = document.querySelector('#zoom .box').getBoundingClientRect();
+        document.querySelector('#zoom .box').dispatchEvent(new MouseEvent('dblclick', { clientX: b.left + b.width / 2, clientY: b.top + b.height / 2, bubbles: true }));
+      }
+      await new Promise(r => setTimeout(r, 450));
+    })()`);
 
     // ① 跟手：从 1× 开始捏大，同时两指中点往左上挪（靠近图片边缘）——旧版在这里会夹位移，锚点溜走
     let r = await run(`const b = Z.box.getBoundingClientRect();

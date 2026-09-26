@@ -43,15 +43,18 @@ const scaleOf = `(() => {
   const st = JSON.parse(await c.ev(`JSON.stringify({
     open: document.getElementById('zoom').open,
     bar: !!document.querySelector('#zoom .zbar'),
-    closeText: (document.querySelector('#zoom .zclose') || {}).textContent || '',
+    closeText: ((document.querySelector('#zoom .zclose') || { getAttribute: () => '' }).getAttribute('aria-label')) || '',
+    extra: !!document.querySelector('#zoom .zpct, #zoom .zreset'),
     closeH: (() => { const b = document.querySelector('#zoom .zclose');
       return b ? Math.round(b.getBoundingClientRect().height) : 0; })(),
     tip: !!document.querySelector('#zoom .ztip'),
     willChange: getComputedStyle(document.getElementById('zoomimg')).willChange
   })`));
   chk('点图打开放大层', st.open === true);
-  chk('工具栏在，关闭键带文字且 ≥44px', st.bar && /关闭/.test(st.closeText) && st.closeH >= 44,
+  // 2026-09-26 照 iPhone「照片」：左上角一个圆形返回键（读屏名"关闭"），没有倍率牌和还原键
+  chk('工具栏在，返回键可读屏且 ≥44px', st.bar && /关闭/.test(st.closeText) && st.closeH >= 44,
       `${st.closeText.trim()} 高 ${st.closeH}`);
+  chk('照「照片」：没有倍率牌和还原键', st.extra === false);
   chk('底部那条操作提示已去掉', st.tip === false);
   chk('静止时没有 will-change（常驻会让放大后发糊）',
       ['auto', ''].includes(st.willChange), st.willChange);
@@ -63,15 +66,17 @@ const scaleOf = `(() => {
   }
   const s1 = await c.ev(scaleOf);
   chk('滚轮能放大', s1 > s0 * 1.2, `${s0.toFixed(2)} -> ${s1.toFixed(2)}`);
-  chk('倍率显示跟着变', (await c.ev(`document.querySelector('#zoom .zpct').textContent`)) !== '100%');
 
   await sleep(500);
   chk('滚轮停下后摘掉 will-change（画面重新栅格化＝清晰）',
       ['auto', ''].includes(await c.ev(`getComputedStyle(document.getElementById('zoomimg')).willChange`)),
       await c.ev(`getComputedStyle(document.getElementById('zoomimg')).willChange`));
 
-  await c.ev(`document.querySelector('#zoom .zreset').click()`);
+  // 没有还原键了：放大状态下双击＝复原（照片的做法）
+  await c.ev(`document.querySelector('#zoom .box').dispatchEvent(
+    new MouseEvent('dblclick', { clientX: 640, clientY: 400, bubbles: true, cancelable: true }))`);
   await sleep(400);
+  chk('放大状态下双击复原到 1×', Math.abs((await c.ev(scaleOf)) - 1) < 0.01, (+(await c.ev(scaleOf))).toFixed(2));
   await c.ev(`document.querySelector('#zoom .box').dispatchEvent(
     new MouseEvent('dblclick', { clientX: 640, clientY: 400, bubbles: true, cancelable: true }))`);
   await sleep(60);
@@ -93,9 +98,11 @@ const scaleOf = `(() => {
   })()`));
   chk('放大后可以按住拖动', mv.before !== mv.after);
 
-  await sleep(2700);
-  chk('闲置一会儿工具栏自动淡出（不挡图）',
-      (await c.ev(`document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
+  await sleep(3300);
+  // 照片：控件不会自己消失，轻点才隐藏（Apple 官方说明）
+  chk('闲置 3 秒控件仍在（照片的做法：不自动消失）',
+      (await c.ev(`document.getElementById('zoom').classList.contains('chrome-off')`)) === false);
+  await c.ev(`document.getElementById('zoom').classList.add('chrome-off')`);
   await c.ev(`document.querySelector('#zoom .box').dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))`);
   await sleep(250);
   chk('动一下鼠标工具栏就回来',
@@ -168,6 +175,10 @@ const scaleOf = `(() => {
   await sleep(450);
   chk('手机上点一下能收起工具栏（不挡图）',
       (await m.ev(`document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
+  await sleep(350);                       // 等背景色过渡跑完
+  chk('收起控件后背景转纯黑（沉浸看图）',
+      (await m.ev(`getComputedStyle(document.getElementById('zoom')).backgroundColor`)).replace(/\s/g, '') === 'rgb(0,0,0)',
+      await m.ev(`getComputedStyle(document.getElementById('zoom')).backgroundColor`));
 
   // 再点一下唤回：这次不能再自动消失（用户反馈"还没来得及点就没了"）
   await T('touchStart', [{ x: 200, y: 520, id: 1 }]);
@@ -175,13 +186,21 @@ const scaleOf = `(() => {
   await sleep(500);
   const backOn = await m.ev(`!document.getElementById('zoom').classList.contains('chrome-off')`);
   chk('再点一下工具栏回来', backOn === true);
+  await sleep(350);
+  chk('控件显示时背景跟系统外观（浅色＝白，不是大黑边）',
+      (await m.ev(`getComputedStyle(document.getElementById('zoom')).backgroundColor`)).replace(/\s/g, '') === 'rgb(255,255,255)',
+      await m.ev(`getComputedStyle(document.getElementById('zoom')).backgroundColor`));
   await sleep(3800);                      // 比自动淡出的 3 秒还久
   chk('主动唤回后不会自己再消失',
       (await m.ev(`!document.getElementById('zoom').classList.contains('chrome-off')`)) === true);
 
   await m.ev(`document.getElementById('zoom').classList.remove('chrome-off')`);
-  await m.ev(`document.querySelector('#zoom .zreset').click()`);
-  await sleep(450);
+  // 没有还原键：双击复原（照片的做法），为下面的"下滑关闭"回到 1×
+  await T('touchStart', [{ x: 200, y: 520, id: 1 }]); await T('touchEnd', []);
+  await sleep(120);
+  await T('touchStart', [{ x: 200, y: 520, id: 1 }]); await T('touchEnd', []);
+  await sleep(500);
+  chk('手机双击复原到 1×', Math.abs((await mScale()) - 1) < 0.01, (await mScale()).toFixed(2));
   await T('touchStart', [{ x: 195, y: 260, id: 1 }]);
   for (let y = 290; y <= 460; y += 30) { await T('touchMove', [{ x: 195, y, id: 1 }]); await sleep(45); }
   const drag = JSON.parse(await m.ev(`JSON.stringify({

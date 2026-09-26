@@ -11,40 +11,37 @@
 <style>
   /* 2026-09-26 改版：内容与结构沿用原版（标题/介绍/三个入口/隐私提示），只改两件事——
      ① 按钮更醒目：主按钮做成实心大按钮，另两个入口带彩色图标和说明
-     ② 按 Apple 的排版：iOS 大标题 + 「设置」App 那种圆角分组列表（inset grouped），提示放在分组下当脚注 */
+     ② 按 Apple HIG 排版（原文查过，出处见各段注释）
+
+     HIG · Layout：「把最重要的内容放在靠顶部、靠起始边的位置」→ 内容从顶部往下排，**不上下居中**
+     （上一版居中过，用户让我去查 HIG 才发现是错的）；大屏上整栏水平居中 */
   body{
-    display:flex;flex-direction:column;justify-content:center;min-height:100dvh;
-    padding:calc(28px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
+    min-height:100dvh;
+    padding:calc(44px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
   }
   .wrap{max-width:520px;margin:0 auto;width:100%}
 
-  /* 大标题：iOS Large Title 是 34pt Bold；宽屏再放大一点 */
-  .app{
-    width:64px;height:64px;border-radius:15px;margin-bottom:18px;
-    display:grid;place-items:center;color:#fff;
-    background:linear-gradient(145deg,#7A76F0,var(--brand) 55%,#4540C4);
-    box-shadow:0 8px 20px rgba(91,87,216,.30), inset 0 1px 0 rgba(255,255,255,.25);
-  }
-  .app svg{width:34px;height:34px}
-  h1{margin:0 0 8px;font-size:clamp(34px,6vw,40px);line-height:1.15;font-weight:700;letter-spacing:.2px}
-  .lead{margin:0 0 28px;color:var(--ink2);font-size:17px;line-height:1.7}
+  /* HIG · Typography：iOS 默认档 Large Title = 34pt / 行高 41pt，粗体；Body = 17pt。
+     （上一版标题上方放过一个"应用图标"——iOS 自己的 App 首页不会这么放，是我加的，已去掉） */
+  h1{margin:0 0 8px;font-size:34px;line-height:41px;font-weight:700;letter-spacing:.2px}
+  .lead{margin:0 0 28px;color:var(--ink2);font-size:17px;line-height:1.6}
 
-  /* 主按钮：Apple 的 prominent 按钮——实心、圆角、整行宽 */
+  /* HIG · Buttons：「最可能的操作用醒目样式（强调色填充背景），一个视图里保持一到两个」
+     「主操作优先用横跨屏幕宽度的按钮」。醒目靠填充色，不靠阴影（上一版的紫色光晕是我加的装饰，已去掉） */
   .primary{
     display:flex;align-items:center;justify-content:center;gap:10px;
-    height:56px;border-radius:14px;margin-bottom:22px;
+    height:54px;border-radius:14px;margin-bottom:28px;
     background:var(--brand);color:#fff;text-decoration:none;
-    font-size:18px;font-weight:600;
-    box-shadow:0 8px 22px rgba(91,87,216,.30);
-    transition:transform .16s cubic-bezier(.34,1.56,.64,1), box-shadow .16s ease, filter .16s ease;
+    font-size:17px;font-weight:600;
+    transition:transform .16s cubic-bezier(.34,1.56,.64,1), filter .16s ease;
   }
-  .primary svg{width:22px;height:22px}
-  .primary:active{transform:scale(.97);filter:brightness(.95)}
-  @media (hover:hover){ .primary:hover{box-shadow:0 12px 28px rgba(91,87,216,.40);filter:brightness(1.05)} }
+  .primary svg{width:20px;height:20px}
+  .primary:active{transform:scale(.97);filter:brightness(.92)}
+  @media (hover:hover){ .primary:hover{filter:brightness(1.06)} }
 
-  /* 分组列表：跟 iOS「设置」一样——白底圆角卡、左侧彩色圆角图标、分隔线从文字处开始、右侧灰色箭头 */
-  .group{background:var(--card);border-radius:14px;overflow:hidden;
-    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  /* HIG · Lists and tables：「iOS 的 grouped 样式用页眉、页脚和额外间距来分隔各组数据」
+     「行首放一张小图，后面跟一句简短说明」「能钻进下一层的行用 disclosure indicator（右侧 ›）」 */
+  .group{background:var(--card);border-radius:14px;overflow:hidden}
   .row{
     display:flex;align-items:center;gap:14px;min-height:72px;padding:12px 16px;
     color:var(--ink);text-decoration:none;position:relative;
@@ -68,23 +65,18 @@
   .foot{display:flex;gap:8px;margin:10px 16px 0;font-size:13px;color:var(--muted);line-height:1.7}
   .foot svg{flex:0 0 auto;width:14px;height:14px;margin-top:4px}
 
-  /* 电脑：栏宽和字号跟着放大一档，不让大屏上显得局促 */
+  /* 电脑：整栏水平居中（HIG：很大的尺寸下"让内容保持水平居中"），顶部留白多一点 */
   @media (min-width:900px){
-    .wrap{max-width:620px}         /* 介绍那句 33 字 × 18px ≈ 594px：620 能一行放下，580 会剩「做。」孤字 */
-    h1{font-size:44px}
-    .lead{font-size:18px}
-    .primary{height:60px;font-size:19px}
-    .row{min-height:78px}
+    body{padding-top:calc(12vh + env(safe-area-inset-top))}
+    .wrap{max-width:580px}          /* 介绍那句 33 字 × 17px ≈ 561px：560 会剩「做。」孤字 */
   }
-  /* 矮屏（320×568 这类）：一屏放下全部内容，只压间距和图标，不换版式 */
+  /* 320 宽：一行只放得下 16 个 17px 的字，33 字的介绍会剩一个「做。」掉到第三行；16px 一行 17 字，正好两行 */
+  @media (max-width:360px){ .lead{font-size:16px} }
+  /* 矮屏（320×568 这类）：一屏放下全部内容，只压间距，不换版式 */
   @media (max-height:640px){
-    body{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom))}
-    .app{width:52px;height:52px;border-radius:12px;margin-bottom:12px}
-    .app svg{width:28px;height:28px}
-    h1{font-size:30px;margin-bottom:6px}
-    .lead{font-size:16px;margin-bottom:18px}
-    .primary{margin-bottom:14px}
-    .row{min-height:64px;padding-top:9px;padding-bottom:9px}
+    body{padding-top:calc(24px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+    .lead{margin-bottom:20px}
+    .primary{margin-bottom:20px}
   }
 
   @media (prefers-reduced-motion: reduce){ .primary,.row{transition:none} }
@@ -92,10 +84,6 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="app" aria-hidden="true">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="6" y="2.5" width="12" height="19" rx="2.6"/><path d="M9.5 7.5h5M9.5 11h5M9.5 14.5h3"/></svg>
-  </div>
   <h1>图文教程</h1>
   <p class="lead">把截图和说明写成一步一屏的教程，发一条链接给对方，点开就能跟着做。</p>
 

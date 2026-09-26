@@ -111,13 +111,18 @@ const SEED = `(async () => {
       bg: cs ? cs.backgroundColor : '',
       fullW: cs ? Math.round(parseFloat(cs.width)) : 0,
       closeH: cr ? Math.round(cr.height) : 0,
-      closeBg: close ? getComputedStyle(close).backgroundColor : ''
+      closeBg: close ? getComputedStyle(close).backgroundColor : '',
+      closeR: close ? getComputedStyle(close).borderRadius : '',
+      closeBlur: close ? (getComputedStyle(close).backdropFilter || getComputedStyle(close).webkitBackdropFilter || '') : '',
+      vw: d.defaultView.innerWidth
     });
   })()`));
   chk('预览里点图能放大', pvZoom.open === true);
+  // 只有 zoom.css 才给得出的特征：弹层铺满全宽、返回键是 44 的正圆、带毛玻璃（缺样式时是浏览器默认的小白框）
+  // 2026-09-26 起底色照 iPhone「照片」跟系统外观走（浅色＝白），不再断言深色底
   chk('预览里的放大器样式完整（zoom.css 已内联）',
-      /rgba\(12, 12, 14/.test(pvZoom.bg) && pvZoom.closeH >= 44,
-      `底色 ${pvZoom.bg} / 关闭键高 ${pvZoom.closeH} 底色 ${pvZoom.closeBg}`);
+      pvZoom.fullW >= pvZoom.vw - 1 && pvZoom.closeH >= 44 && pvZoom.closeR === '50%' && /blur/.test(pvZoom.closeBlur),
+      `宽 ${pvZoom.fullW}/${pvZoom.vw} / 返回键高 ${pvZoom.closeH} 圆角 ${pvZoom.closeR} / ${pvZoom.closeBlur}`);
   await c.ev(`document.getElementById('pvframe').contentDocument.querySelector('#zoom .zclose').click()`);
   await sleep(200);
 

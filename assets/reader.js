@@ -377,6 +377,12 @@
      改这里所有历史教程一起生效（不用重新发布）。 */
   let panel = null;
 
+  /* 放大查看器顶栏（跟 zoom.js 里的 SGZoomBar 是同一份标记；zoom.js 按需加载，建工具栏时可能还没到） */
+  const ZBAR = '<button class="zclose" type="button" aria-label="关闭">' +
+    '<svg viewBox="0 0 12 20" width="12" height="20" fill="none" stroke="currentColor" stroke-width="2.6" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2L2 10l8 8"/></svg></button>' +
+    '<span class="ztitle"></span><span class="zspacer" aria-hidden="true"></span>';
+
   function buildStepsPanel() {
     if (panel) return panel;
 
@@ -476,12 +482,10 @@
     dlg.querySelector('.close')?.remove();       // 换成带文字的高对比按钮
     if (!dlg.querySelector('.zbar')) {
       const bar = el('div', 'zbar');
-      bar.innerHTML = '<span class="zpct">100%</span>' +
-        '<button class="zreset" type="button">还原</button>' +
-        '<button class="zclose" type="button">✕ 关闭</button>';
+      // 照 iPhone「照片」：左上角一个返回键 + 顶部居中标题；没有倍率牌和还原键（复原靠双击）
+      bar.innerHTML = ZBAR;
       dlg.appendChild(bar);
       bar.querySelector('.zclose').addEventListener('click', () => dlg.close());
-      bar.querySelector('.zreset').addEventListener('click', () => zoomer && zoomer.reset());
     }
     return dlg;
   }

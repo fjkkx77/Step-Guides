@@ -1,15 +1,39 @@
 /* 图片放大查看器的样式。阅读页和写作页共用——
    放在 reader.css 里时写作页套不上（写作页不引 reader.css），
-   那正是「写作页的放大器又小又没工具栏」的原因。 */
+   那正是「写作页的放大器又小又没工具栏」的原因。
+
+   2026-09-26 照 iPhone「照片」重做外观（用户："周围大黑边以及 UI 按钮设计的太丑了"）：
+   · 背景：显示控件时跟系统外观走（浅色白 / 深色黑）；轻点隐藏控件后转纯黑沉浸看图
+     （Apple 官方说明只写了"轻点隐藏/显示控件"，背景变色是对 iOS 实际表现的观察）
+   · 按钮：只有左上角一个圆形毛玻璃返回键 + 顶部居中标题；去掉倍率牌和还原键（照片没有，复原靠双击）
+   · 图片：不再垫白底加圆角——那会让截图像一张贴在黑纸上的卡片 */
 
 /* ── 放大层 ─────────────────────────────────────────── */
 dialog#zoom{
+  /* --zrgb：背景色的 RGB 分量，好让下滑关闭时只调透明度 */
+  --zrgb:255 255 255;
+  --glass:rgba(255,255,255,.72);
+  --glass-ink:#1C1C1E;
+  --glass-line:rgba(0,0,0,.08);
   border:0;padding:0;margin:0;width:100vw;height:100dvh;max-width:100vw;max-height:100dvh;
   /* --zfade 由 JS 在"下滑关闭"时调低：越往下拉背景越透，跟 iOS 相册一个观感 */
-  background:rgba(12,12,14,calc(.96 * var(--zfade, 1)));
+  background:rgb(var(--zrgb) / calc(1 * var(--zfade, 1)));
+  transition:background-color .28s ease;
   overflow:hidden;
 }
-dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) dialog#zoom{
+    --zrgb:0 0 0; --glass:rgba(44,44,48,.72); --glass-ink:#F5F5F7; --glass-line:rgba(255,255,255,.10);
+  }
+}
+:root[data-theme="dark"] dialog#zoom{
+  --zrgb:0 0 0; --glass:rgba(44,44,48,.72); --glass-ink:#F5F5F7; --glass-line:rgba(255,255,255,.10);
+}
+/* 隐藏控件 = 沉浸看图：背景一律纯黑 */
+dialog#zoom.chrome-off{--zrgb:0 0 0}
+/* 下滑关闭时背景变透明，露出的是原来的页面（照片里露出的是图库），所以蒙版不压暗 */
+dialog#zoom::backdrop{background:transparent}
+
 #zoom .box{
   width:100%;height:100%;
   display:flex;align-items:center;justify-content:center;
@@ -21,7 +45,6 @@ dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
 #zoom .box.zoomed:active{cursor:grabbing}
 #zoom img{
   max-width:100%;max-height:100%;
-  background:#fff;border-radius:8px;
   transform-origin:center center;
   user-select:none;-webkit-user-drag:none;
   /* 这里**不要**写 will-change:transform —— GPU 会按当前倍率栅格化一次再拉伸，
@@ -29,32 +52,45 @@ dialog#zoom::backdrop{background:rgba(0,0,0,.6)}
 }
 /* 双击/还原/回弹这类"一步到位"的变化才走过渡，手势跟随时不加（会拖慢跟手） */
 #zoom img.zanim{transition:transform .24s cubic-bezier(.22,.8,.3,1)}
-@media (prefers-reduced-motion: reduce){ #zoom img.zanim{transition:none} }
-/* 工具栏：白底深字，压在深色蒙版上，怎么都看得清（旧版是半透明白圈，看不清） */
+@media (prefers-reduced-motion: reduce){ #zoom img.zanim{transition:none} dialog#zoom{transition:none} }
+
+/* ── 顶栏：左上角返回键 + 居中标题（照片的导航栏） ──────────
+   两边等宽（返回键 44 / 右侧占位 44），标题才是真正的屏幕正中 */
 #zoom .zbar{
   position:fixed;left:0;right:0;
   top:calc(8px + env(safe-area-inset-top));
-  display:flex;align-items:center;justify-content:flex-end;gap:8px;
-  padding:0 12px;
+  display:flex;align-items:center;gap:12px;
+  padding:0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right));
+  pointer-events:none;          /* 栏本身不挡手势，只有按钮能点 */
   transition:opacity .22s ease;
 }
-/* 工具栏会自动淡出，免得挡住图上的内容（手机屏幕小，尤其明显）。
-   手机：点一下画面唤回/收起；电脑：动一下鼠标就回来 */
-#zoom.chrome-off .zbar{opacity:0;pointer-events:none}
-/* 工具栏上的东西一律用「实色底」，不能用半透明白 ——
-   图片放大后占满整屏，背后经常是浅色截图，半透明白字直接看不见（踩过两次） */
-#zoom .zpct{
-  margin-right:auto;height:36px;padding:0 12px;border-radius:18px;
-  background:rgba(20,20,22,.78);color:#fff;font-size:14px;font-weight:600;
+#zoom.chrome-off .zbar{opacity:0}
+#zoom.chrome-off .zbar *{pointer-events:none !important}
+
+/* 圆形毛玻璃按钮（iOS 26 的导航栏按钮就是这种浮在内容上的玻璃圆钮）。
+   毛玻璃 + 细描边：压在任何颜色的截图上都看得清 */
+#zoom .zclose{
+  pointer-events:auto;flex:0 0 auto;
+  width:44px;height:44px;border-radius:50%;
+  display:grid;place-items:center;padding:0 2px 0 0;
+  color:var(--glass-ink);background:var(--glass);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:0 0 0 .5px var(--glass-line), 0 4px 14px rgba(0,0,0,.12);
+  transition:transform .16s cubic-bezier(.34,1.56,.64,1);
+}
+#zoom .zclose:active{transform:scale(.9)}
+@media (hover:hover){ #zoom .zclose:hover{background:var(--glass)} }
+#zoom .ztitle{
+  flex:0 1 auto;min-width:0;margin:0 auto;
+  height:36px;padding:0 14px;border-radius:18px;
   display:flex;align-items:center;
-  box-shadow:0 1px 6px rgba(0,0,0,.35);
+  font-size:15px;font-weight:600;color:var(--glass-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:var(--glass);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:0 0 0 .5px var(--glass-line);
 }
-#zoom .zreset,#zoom .zclose{
-  height:var(--tap);padding:0 16px;border-radius:22px;
-  font-size:16px;font-weight:600;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 2px 10px rgba(0,0,0,.35);
+#zoom .zspacer{flex:0 0 44px;height:44px}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  /* 不支持毛玻璃的浏览器：换成接近不透明的底，保证看得清 */
+  #zoom .zclose,#zoom .ztitle{background:rgb(var(--zrgb) / .92)}
 }
-#zoom .zreset{background:rgba(20,20,22,.82);color:#fff;border:1px solid rgba(255,255,255,.35)}
-#zoom .zclose{background:#fff;color:#111}
-/* 底部的操作提示去掉了：占地方、还挡内容，用户反馈说已经会用了 */
