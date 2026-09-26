@@ -13,8 +13,24 @@ body{display:flex;flex-direction:column;min-height:100dvh}
   display:flex;align-items:center;gap:8px;
 }
 .top h1{
-  flex:1;min-width:0;margin:0;font-size:16px;font-weight:600;line-height:1.35;
+  flex:0 1 auto;min-width:0;margin:0;font-size:16px;font-weight:600;line-height:1.35;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* 进度紧跟标题（reader.js 的 liftCount 把它从底栏挪上来）。
+   标题太长时被省略的是标题，进度永远完整显示（flex-shrink:0）；
+   右边的按钮靠 margin-left:auto 推到最右 */
+.top .count{
+  flex:0 0 auto;min-width:0;padding:2px 8px;border-radius:999px;
+  background:rgba(120,120,130,.12);color:var(--muted);
+  font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.top .count + *{margin-left:auto}
+/* 进度占了标题 ~60px。窄屏把右侧两个按钮的内边距收一收还回去一部分，
+   热区仍 ≥44（高度由 --tap 保证，宽度有 min-width 兜底） */
+@media (max-width:430px){
+  .top{gap:6px}
+  .top .count{padding:2px 7px}
+  .top .modebtn,.top .stepsbtn{padding:0 7px;gap:3px}
 }
 .modebtn{
   flex:0 0 auto;height:var(--tap);min-width:var(--tap);padding:0 12px;border-radius:12px;
@@ -195,7 +211,7 @@ html[data-mode="long"] .topbar-progress{display:none}
   display:flex;align-items:center;gap:4px;color:var(--brand);font-size:14px;
 }
 .stepsbtn .sb-ico{font-size:15px}
-.stepsbtn .sb-n::after{content:' 步'}
+
 
 .steps-mask{
   position:fixed;inset:0;z-index:60;

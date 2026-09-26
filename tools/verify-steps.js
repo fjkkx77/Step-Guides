@@ -27,7 +27,9 @@ async function run(w, h, label) {
     })()`));
     chk('顶栏有「全部步骤」按钮且热区够', btn.exists && btn.h >= 44, `${btn.text} ${btn.w}×${btn.h}`);
     const total = +(await c.ev(`window.SGReaderSteps || document.querySelectorAll('.page').length`));
-    chk('按钮上显示总步数', btn.text.indexOf(String(total)) >= 0, `${btn.text}（共 ${total} 步）`);
+    // 2026-09-26 起总步数由标题旁的「1 / N」给出（reader.js liftCount），按钮只写「目录」
+    const cnt = JSON.parse(await c.ev(`JSON.stringify({ inTop: !!document.querySelector('.top #count'), t: document.getElementById('count').textContent.trim() })`));
+    chk('顶栏标题旁显示「当前 / 总步数」', cnt.inTop && cnt.t === `1 / ${total}`, `${cnt.t}（共 ${total} 步）`);
 
     await c.ev(`document.querySelector('.stepsbtn').click()`);
     await sleep(500);

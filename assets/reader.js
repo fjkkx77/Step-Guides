@@ -109,7 +109,7 @@
     }));
 
     $('#count').textContent = `1 / ${steps.length}`;
-    buildStepsPanel().btn.querySelector('.sb-n').textContent = steps.length;
+    buildStepsPanel();
     // 空字符串也会命中 html[data-fx] 选择器，关掉必须把属性整个删掉
     if (FX) document.documentElement.dataset.fx = FX;
     else delete document.documentElement.dataset.fx;
@@ -314,7 +314,8 @@
     const btn = el('button', 'stepsbtn tap');
     btn.type = 'button';
     btn.setAttribute('aria-label', '全部步骤');
-    btn.innerHTML = '<span class="sb-ico">▦</span><span class="sb-n"></span>';
+    // 按钮上原来写「12 步」；总步数现在由标题旁的「1 / 12」给了，再写一遍就重复了
+    btn.innerHTML = '<span class="sb-ico">▦</span><span class="sb-n">目录</span>';
     btn.addEventListener('click', () => openSteps());
     const top = $('.top');
     if (top) top.insertBefore(btn, $('#modebtn'));
@@ -338,7 +339,6 @@
 
   function fillSteps() {
     const p = buildStepsPanel();
-    p.btn.querySelector('.sb-n').textContent = steps.length;
     p.grid.replaceChildren(...steps.map((s, i) => {
       const cell = el('button', 'scell tap');
       cell.type = 'button';
@@ -440,7 +440,21 @@
   }
 
   /* ── 启动 ─────────────────────────────────────────── */
+  /* 「第几步 / 共几步」挪到顶栏、紧跟标题。
+     原来夹在底栏两个按钮中间：眼睛读的是 标题 → 图 → 字，进度却在最后一行，要专门往下找；
+     挪上来之后，"这是什么 + 到哪了"在同一行一眼看完，底栏只剩两个按钮、各自更宽，拇指更好点。
+     长文模式底栏是隐藏的，以前根本看不到进度，现在顶栏吸顶也跟着显示。
+     **用 JS 挪而不是改壳子**：每份已发布的教程 index.html 里都写死了底栏里的 #count，
+     改壳子要重新发布所有旧教程；在这里挪一下，全部历史教程一起生效。 */
+  function liftCount() {
+    const c = $('#count'), h = $('#title');
+    if (!c || !h || c.parentNode === h.parentNode) return;
+    c.setAttribute('aria-live', 'polite');   // 翻页时读屏会念出新的进度
+    h.after(c);
+  }
+
   function boot() {
+    liftCount();
     let saved = 'step';
     try { saved = localStorage.getItem(MODE_KEY) || 'step'; } catch (e) { /* 忽略 */ }
     setMode(saved === 'long' ? 'long' : 'step');

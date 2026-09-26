@@ -44,22 +44,29 @@
 
 <!-- 设置：仓库与 token -->
 <dialog id="dlg-settings">
-  <div class="sheet">
+  <!-- 用户名 + token 做成「账号 + 密码」的真表单：点保存时 iPhone / Chrome 会问要不要存进系统的密码管理。
+       为什么不自己在网页里记"历史"：Safari 连续 7 天没打开这个站就会把 localStorage / IndexedDB 整个清掉，
+       自己记的历史会跟着一起没；系统钥匙串不归网页管，清不掉。
+       method="dialog"：原生提交并关弹窗，不跳页——密码管理器认的就是"表单真的提交了" -->
+  <form class="sheet" id="f-settings" method="dialog">
     <h2>发布设置</h2>
     <p>token 只存在这台设备的浏览器里，不会上传。建议用 fine-grained token，
        权限只勾这一个仓库的 <b>Contents: Read and write</b>，随时可以在 GitHub 上吊销。</p>
+    <p class="keytip" id="keytip" hidden></p>
     <div class="field"><label for="f-owner">GitHub 用户名</label>
-      <input id="f-owner" type="text" autocomplete="off" placeholder="fjkkx77"></div>
+      <input id="f-owner" name="username" type="text" autocomplete="username"
+             autocapitalize="off" spellcheck="false" placeholder="例如 fjkkx77"></div>
     <div class="field"><label for="f-repo">仓库名</label>
-      <input id="f-repo" type="text" autocomplete="off" placeholder="Step-Guides"></div>
+      <input id="f-repo" type="text" autocomplete="off" autocapitalize="off" placeholder="Step-Guides"></div>
     <div class="field"><label for="f-branch">分支</label>
-      <input id="f-branch" type="text" autocomplete="off" placeholder="main"></div>
+      <input id="f-branch" type="text" autocomplete="off" autocapitalize="off" placeholder="main"></div>
     <div class="field"><label for="f-token">Token</label>
-      <input id="f-token" type="password" autocomplete="off" placeholder="github_pat_…"></div>
+      <input id="f-token" name="password" type="password" autocomplete="current-password"
+             placeholder="github_pat_…"></div>
     <div class="row">
       <button class="tap danger" id="btn-forget" type="button">清除 token</button>
       <button class="tap" id="btn-cancel-set" type="button">取消</button>
-      <button class="tap go" id="btn-save-set" type="button">保存</button>
+      <button class="tap go" id="btn-save-set" type="submit">保存</button>
     </div>
     <div class="row">
       <button class="tap" id="btn-qr" type="button" hidden>📱 出码给手机扫</button>
@@ -72,7 +79,7 @@
       <button class="tap" id="btn-export" type="button">⬇ 导出备份（单文件 HTML）</button>
       <button class="tap danger" id="btn-discard" type="button">🗑 丢弃这份草稿</button>
     </div>
-  </div>
+  </form>
 </dialog>
 
 <!-- 删除确认：配方要求删除永远二次确认，且不能用原生 confirm -->

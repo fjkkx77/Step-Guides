@@ -595,7 +595,9 @@ ${zoomCss}</style></head>
       cfg.branch = p.b || 'main'; cfg.token = p.t;
       saveCfg();
       $('#dlg-import').close();
-      alert('设置已导入这台设备，可以直接发布了');
+      // 不直接 alert 完事：扫码导入不经过表单提交，系统密码管理器看不见，
+      // 下次 Safari 清数据还得再扫一次。打开设置让人点一下「保存」，把它存进钥匙串
+      openSettings('imported');
     };
     $('#btn-imp-no').onclick = () => $('#dlg-import').close();
     $('#dlg-import').showModal();
@@ -812,12 +814,30 @@ ${zoomCss}</style></head>
   }
 
   /* ── 设置 ─────────────────────────────────────────── */
-  function openSettings() {
+  /* 设置为什么会"自己没了"：Safari 的防跟踪（ITP）在**连续 7 天用 Safari 却没点过这个站**时，
+     会把它的 localStorage、IndexedDB 全部删掉（webkit.org/blog/10218）。添加到主屏幕的网页不受这条影响。
+     网页自己没法阻止，所以把「记住」交给系统密码管理（见 w/index.html 表单上的注释） */
+  const KEYTIP = {
+    imported: '✅ 已导入这台设备。<b>再点一次「保存」</b>，手机会问要不要存进「密码」——选存储。' +
+              '以后设置被浏览器清掉了，点 Token 框、在键盘上方选这条就能填回来，不用再扫码。',
+    empty: '设置是空的？如果以前存过，多半是 Safari 7 天没打开这个站、把网站数据清掉了。' +
+           '<b>点 Token 框</b>，键盘上方有存过的就能直接填回来；没有就扫码导入一次，保存时记得存进「密码」。',
+  };
+  function openSettings(why) {
     $('#f-owner').value = cfg.owner || '';
     $('#f-repo').value = cfg.repo || 'Step-Guides';
     $('#f-branch').value = cfg.branch || 'main';
     $('#f-token').value = cfg.token || '';
+    const tip = KEYTIP[why] || (!cfg.token ? KEYTIP.empty : '');
+    $('#keytip').innerHTML = tip;
+    $('#keytip').hidden = !tip;
     $('#dlg-settings').showModal();
+  }
+
+  /* 请求"持久存储"。WebKit 只在类似「添加到主屏幕」的情况下才批准（webkit.org/blog/14403），
+     普通 Safari 标签页多半被拒——所以这只是能争取就争取，不指望它，真正兜底的是钥匙串 */
+  function askPersist() {
+    try { navigator.storage?.persist?.().catch(() => {}); } catch (e) { /* 忽略 */ }
   }
 
   /* ── 事件 ─────────────────────────────────────────── */
@@ -902,14 +922,15 @@ ${zoomCss}</style></head>
 
     $('#btn-settings').onclick = openSettings;
     $('#btn-cancel-set').onclick = () => $('#dlg-settings').close();
-    $('#btn-save-set').onclick = () => {
+    // 走表单的 submit 而不是按钮 onclick：method="dialog" 的真提交才会让密码管理器弹「要存储吗」
+    $('#f-settings').addEventListener('submit', () => {
       cfg.owner = $('#f-owner').value.trim();
       cfg.repo = $('#f-repo').value.trim() || 'Step-Guides';
       cfg.branch = $('#f-branch').value.trim() || 'main';
       cfg.token = $('#f-token').value.trim();
       saveCfg();
-      $('#dlg-settings').close();
-    };
+      askPersist();
+    });
     $('#btn-forget').onclick = () => {
       cfg.token = '';
       saveCfg();
