@@ -13,11 +13,12 @@
 ## 看教程时能做什么
 
 - **一步一屏**左右翻；顶栏可切「长文」模式上下滑回看
-- 顶栏 **▦ N 步** 打开全部步骤缩略图，点一下直接跳过去（手机从底部抽出，电脑贴左边）
+- 顶栏 **▦ 目录** 打开全部步骤缩略图，点一下直接跳过去（手机从底部抽出，电脑贴左边）
 - **点图放大**：电脑滚轮缩放 / 双击 / 按住拖动 / 点空白处关；
   手机双指捏合 / 双击 / 拖动查看 / **向下滑关闭**（Apple 相册的做法）
-- 放大时工具栏会**自动淡出**，手机点一下画面唤回、电脑动一下鼠标唤回
+- 放大后照 iPhone「照片」：轻点画面收起/唤回工具栏（不会自己消失）
 - 长文模式里顶栏**一直吸在最上面**（全部步骤/切模式随时够得着），滚远了右下角出现**回顶部**悬浮键
+- 看到第几步会记在这台设备上：中途切去「设置」照做、页面被系统重新加载，回来还在那一步（12 小时内）
 
 ## 第一次使用：建一个 token
 
@@ -31,6 +32,8 @@
 5. 生成后复制，打开 `/w/` 点右上角 ⚙，填 GitHub 用户名、仓库名、分支、token，保存
 
 token 只存在这台设备的浏览器里（localStorage），不会上传到任何地方。
+**写作页和教程库只在 jc.wbztl.xyz 上用**：在 github.io 上打开会自动转过去，并清掉 github.io 那边存的设置——
+你在 github.io 下有 11 个站，它们共用一份本地存储，token 放在那边，任何一个站出漏洞都能读走它。
 万一泄露，去 GitHub 上点一下吊销即可——它碰不到你其它仓库。
 
 ### 换一台设备（比如手机）怎么办
@@ -62,6 +65,11 @@ localStorage 按「设备 + 浏览器」隔离，所以每台设备要填一次�
 
 改已经发布的教程：`/mine/` → 编辑，改完重新发布，**链接不变**。
 
+草稿：每份各存一份，互不覆盖（新写的一份、每份正在改的已发布教程各一份），都在 `/mine/` 顶部的「草稿」里，随时接着写。
+草稿只存在这台设备上；Safari 连续 7 天没打开这个站会把它清掉，重要的先「⚙ → 导出备份」。
+
+`/mine/` 只在填过发布设置（有 token）的设备上列出已发布的教程，别人打开看不到你的教程列表。
+
 ## 已知限制
 
 | 限制 | 影响 | 怎么绕 |
@@ -69,30 +77,32 @@ localStorage 按「设备 + 浏览器」隔离，所以每台设备要填一次�
 | GitHub Pages 每小时最多 10 次构建（软限） | 一小时内反复发布会被卡 | 草稿只存本地，点发布才提交；别把发布当保存用 |
 | 发布要能连上 `api.github.com` | 国内网络下手机可能发不出去 | 挂代理；或先存草稿，回电脑再发。失败不会丢草稿，也不会在仓库里留下半个教程 |
 | 两台设备同时发布 | 后一个会撞上「分支被推进了」 | 已自动处理：换新基准重来一轮，图片不用重传 |
-| Pages 站点必然是公开可访问的 | 拿到链接的人都能看 | 链接是随机 8 位、`noindex` + `robots.txt` 禁收录；真正敏感的内容不要放 |
+| 仓库是公开的（GitHub Pages 免费版的要求） | 拿到链接、或者找到这个仓库的人都能看；删掉的教程在 Git 历史里还能取回 | 链接是随机 8 位、页面带 `noindex`；真正敏感的内容不要放 |
 | 单个仓库建议 ≤1GB | 约三千份教程 | 一份教程（12 张截图）压缩后约 0.3MB |
 
 ## 本地开发
 
 ```bash
+node tools/run-all.js                    # 一条命令跑全部本地测试（自己起服务，假 GitHub，不碰真仓库）
+node tools/verify-audit.js               # 2026-10-09 审查发现的问题，每条一个回归用例
 node tools/mock.js "<仓库目录>" 8879 &   # 本地静态服务（目录->index.html，跟 Pages 行为一致）
 node tools/selftest.js                   # 纯函数 + 压缩自检（16 条）
 node tools/verify.js t/qhftq5kz/ --shots      # 阅读页三档真实视口
 node tools/verify.js t/qhftq5kz/ --mode=long  # 长文模式
 node tools/verify-writer.js               # 写作页三档
 node tools/verify.js t/qhftq5kz/ --base=https://fjkkx77.github.io/Step-Guides/   # 直接验线上
-node tools/smoke-publish.js               # 真发一次再删掉（验原子提交+跨域+删除路径）
+node tools/smoke-publish.js --real        # 真发一次再删掉（验原子提交+跨域+删除路径；会在仓库留提交，不加 --real 不跑）
 node tools/verify-qr.js                   # 出码：用独立解码器 jsQR 交叉验 + 链接导入流程
 node tools/verify-scan.js                 # 扫码：静态图喂给真正的解码函数（不开摄像头，见下）
 node tools/verify-paste.js                # 手机粘贴的两条路径
 node tools/verify-editor.js               # 预览 / 换图 / 缩略图放大 / 离开逻辑
 node tools/verify-zoom.js                 # 放大器（滚轮/双击/拖动/关闭）
 node tools/verify-gestures.js             # 左滑删除 + 长按拖动（真实触摸事件）
-node tools/verify-nav.js [站点地址]        # 返回/主页键落在哪（每个场景一个干净浏览器）
+node tools/verify-nav.js [站点地址]        # 返回/主页键落在哪（不带地址时测的是线上，浏览器要能走代理）
 node tools/verify-steps.js                # 「全部步骤」面板（手机/窄屏/电脑三档）
 node tools/verify-long.js                 # 长文模式：顶栏吸顶 + 回顶部悬浮键
 node tools/verify-moveto.js               # 「移到第几步」
-node tools/verify-delete.js               # 删除已发布的教程（真发一份再删，不留痕）
+node tools/verify-delete.js --real        # 删除已发布的教程（真发一份再删；内容删干净，但仓库会留两条提交）
 ```
 
 写测试时的两个教训（都栽过）：**别用固定 sleep 等页面**，等条件成立；
@@ -120,9 +130,11 @@ node tools/verify-delete.js               # 删除已发布的教程（真发一
 ```
 assets/reader.js    阅读器（全站唯一一份，改它所有历史教程一起生效）
 assets/writer.js    写作页
-assets/img.js       图片压缩（长边>1600 才缩，绝不放大）
+assets/img.js       图片压缩（宽度>1440 才缩，另有 600 万像素兜底，绝不放大）
 assets/github.js    Git Data API 原子发布
-assets/store.js     草稿（IndexedDB）
+assets/store.js     草稿（IndexedDB，每份各占一个位置，图片单独存）
+assets/ui.js        站内的提示框/确认框（代替浏览器原生弹框）
+assets/primary.js   github.io 上的写作页/教程库转到 jc.wbztl.xyz
 t/<id>/             一份教程：index.html 壳子 + data.json + i/*.webp
 list.json           教程索引
 ```

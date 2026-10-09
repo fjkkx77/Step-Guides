@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111114" media="(prefers-color-scheme: dark)">
 <title>写教程</title>
+<script src="../assets/primary.js"></script>
 <link rel="stylesheet" href="../assets/base.css">
 <link rel="stylesheet" href="../assets/writer.css">
 <link rel="stylesheet" href="../assets/zoom.css">
@@ -94,7 +95,19 @@
   </div>
 </dialog>
 
-<!-- 离开时的三选一（原生 confirm 只有两个键，说不清楚） -->
+<!-- 打开写作页时：接着上次的，还是新建/用线上版本。两个按钮都不删东西（原生弹框里点「取消」会删，审查 P2-12） -->
+<dialog id="dlg-resume">
+  <div class="sheet">
+    <h2 id="rs-title">接着写上次那份？</h2>
+    <p id="rs-desc"></p>
+    <div class="stack">
+      <button class="tap go" id="rs-go" type="button">接着写</button>
+      <button class="tap" id="rs-new" type="button">新建一份</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 离开时的三选一（原生弹框只有两个键，说不清楚）。内容本来就自动存着：默认「留着」，「删掉」要再确认一次（审查 P1-3） -->
 <dialog id="dlg-leave">
   <div class="sheet">
     <h2 id="lv-title">离开？</h2>
@@ -198,6 +211,8 @@
     <div class="big" id="p-title">正在发布…</div>
     <div class="bar"><i id="p-fill"></i></div>
     <div class="msg" id="p-msg">准备中</div>
+    <!-- 网络卡住时能停下来（审查 P2-4）；提交生效后再点就是「不等构建了」 -->
+    <div class="row"><button class="tap" id="p-cancel" type="button" hidden>取消</button></div>
     <div class="row" id="p-row" hidden></div>
   </div>
 </dialog>
@@ -208,6 +223,7 @@
 <script src="../assets/img.js"></script>
 <script src="../assets/github.js"></script>
 <script src="../assets/store.js"></script>
+<script src="../assets/ui.js"></script>
 <script src="../assets/writer.js"></script>
 </body>
 </html>

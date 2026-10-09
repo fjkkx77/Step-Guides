@@ -174,6 +174,9 @@ const SEED = `(async () => {
 
   await c.goto(`http://127.0.0.1:${PORT}/w/`);
   await sleep(700);
+  // 2026-10-09 起：有没发完的草稿时先问「接着写 / 新建一份」（站内弹框，不再是原生弹框）。这里选新建
+  if (await c.ev(`document.getElementById('dlg-resume').open`)) await c.ev(`document.getElementById('rs-new').click()`);
+  await sleep(300);
   await c.ev(`(() => { const t = document.getElementById('title');
     t.value = '改了点东西'; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await sleep(300);
@@ -188,16 +191,21 @@ const SEED = `(async () => {
   })`));
   chk('改过东西时，点返回弹三选一', lv.open === true && /\/w\//.test(lv.path),
       `${lv.save} / ${lv.drop} / ${lv.stay}`);
-  chk('三个出口都说人话', /保存/.test(lv.save) && /不保存|放弃/.test(lv.drop) && /留下/.test(lv.stay));
+  // 2026-10-09 起（审查 P1-3）：内容本来就自动存着，默认「留着」；「删掉」要再确认一次，而且只删这一份
+  chk('三个出口都说人话', /留着/.test(lv.save) && /删掉|放弃/.test(lv.drop) && /留下/.test(lv.stay),
+      `${lv.save} / ${lv.drop} / ${lv.stay}`);
 
   await c.ev(`document.getElementById('lv-drop').click()`);
+  await sleep(500);
+  chk('选「删掉」先弹确认（红色按钮），还没走', await c.ev(`!!document.querySelector('dialog.sg-ui[open] .danger-solid')`) && /\/w\//.test(await c.ev(`location.pathname`)));
+  await c.ev(`document.querySelector('dialog.sg-ui[open] .sg-ok').click()`);
   await sleep(1000);
-  chk('选「不保存直接离开」真的走了', !/\/w\//.test(await c.ev(`location.pathname`)),
+  chk('确认删掉后真的走了', !/\/w\//.test(await c.ev(`location.pathname`)),
       '落在 ' + await c.ev(`location.pathname`));
 
   await c.goto(`http://127.0.0.1:${PORT}/w/`);
   await sleep(1000);
-  chk('丢弃后不会再被问「要不要接着上次的」', (await c.ev(`window.SGWriter.draft.steps.length`)) === 0);
+  chk('删掉的那份不会再被问「要不要接着写」', !(await c.ev(`/改了点东西/.test(document.getElementById('rs-desc').textContent) && document.getElementById('dlg-resume').open`)));
 
   await c.close();
   console.log(bad ? `\n共 ${bad} 条未通过` : '\n全部通过');

@@ -12,6 +12,10 @@
   /* 顶/底栏的半透明底色。.72 是权衡出来的：再透文字对比度就掉了，再实就看不出材质 */
   --bar:rgba(242,242,247,.72);
   --pill:rgba(91,87,216,.10);   /* 顶栏胶囊底色，跟 --brand 同色系但压得很淡 */
+  /* 白字压在上面的实心底（按钮、序号徽章）。浅色跟 --brand 一样；深色要换深一档，
+     因为深色的 --brand（#8B87FF）上白字只有 3.0:1（审查 P2-9）。#5E5CE6 是 iOS 深色 indigo，白字 5.06:1 */
+  --brand-fill:#5B57D8;
+  --danger:#c1121f;             /* 红色文字（错误说明、删除）：白底 5.9:1 */
   --radius:16px;
   --tap:48px;           /* 触摸目标下限，>= Apple HIG 的 44 */
 }
@@ -27,6 +31,8 @@
     --shot-bg:#FFFFFF;
     --bar:rgba(17,17,20,.72);
     --pill:rgba(139,135,255,.16);   /* 深色底上要稍重一点才看得见 */
+    --brand-fill:#5E5CE6;
+    --danger:#ff8a80;               /* 深色卡片上 7.4:1；原来的 #c1121f 只有 2.7:1，错误说明几乎看不清 */
   }
 }
 :root[data-theme="dark"]{
@@ -34,6 +40,7 @@
   --muted:#9B9BA3; --brand:#8B87FF; --line:rgba(255,255,255,.14); --shot-bg:#FFFFFF;
   --bar:rgba(17,17,20,.72);
   --pill:rgba(139,135,255,.16);
+  --brand-fill:#5E5CE6; --danger:#ff8a80;
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}

@@ -47,7 +47,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 }
 .step .no i{
   min-width:24px;height:24px;margin:4px 0 0 4px;padding:0 6px;border-radius:12px;
-  background:var(--brand);color:#fff;font-size:13px;font-weight:600;font-style:normal;
+  background:var(--brand-fill);color:#fff;font-size:13px;font-weight:600;font-style:normal;
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 1px 3px rgba(0,0,0,.25);
 }
@@ -99,7 +99,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .addbtn{
   display:inline-flex;align-items:center;justify-content:center;
   height:var(--tap);padding:0 18px;border-radius:12px;
-  background:var(--brand);color:#fff;font-size:16px;font-weight:600;
+  background:var(--brand-fill);color:#fff;font-size:16px;font-weight:600;
   border:1px solid transparent;white-space:nowrap;
 }
 .addbtn.ghost{background:var(--card);color:var(--ink);border-color:var(--line);font-weight:400}
@@ -118,7 +118,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
   border:1px solid var(--line);background:var(--card);color:var(--ink);
   display:flex;align-items:center;justify-content:center;gap:5px;flex:1;
 }
-.wbottom button.go{flex:1.6;background:var(--brand);color:#fff;border-color:transparent;font-weight:600}
+.wbottom button.go{flex:1.6;background:var(--brand-fill);color:#fff;border-color:transparent;font-weight:600}
 
 /* ── 弹层 ───────────────────────────────────────────── */
 dialog{
@@ -142,8 +142,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   flex:1;height:var(--tap);border-radius:12px;font-size:16px;
   border:1px solid var(--line);background:var(--bg);color:var(--ink);
 }
-.row button.go{background:var(--brand);color:#fff;border-color:transparent;font-weight:600}
-.row button.danger{color:#c1121f}
+.row button.go{background:var(--brand-fill);color:#fff;border-color:transparent;font-weight:600}
+.row button.danger{color:var(--danger)}
 
 .prog{padding:22px 18px;text-align:center}
 .prog .big{font-size:17px;font-weight:600;margin-bottom:8px}
@@ -151,7 +151,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .prog .bar i{display:block;height:100%;width:0;background:var(--brand);transition:width .25s}
 .prog .msg{font-size:14px;color:var(--muted);line-height:1.7;word-break:break-all}
 .prog a{color:var(--brand);font-size:16px;word-break:break-all}
-.err{color:#c1121f;font-size:14px;line-height:1.7;text-align:left;white-space:pre-wrap}
+/* 发布结果区：说明、链接、按钮行要上下排。它本身带 .row（横排），以前失败时说明和按钮挤在一行，按钮被压成一个字一行 */
+#p-row{flex-direction:column;align-items:stretch}
+#p-row .row{margin-top:10px}
+/* 「接着写」是主操作，实心醒目（只作用于这个新弹框，别的弹框保持原样） */
+#dlg-resume .stack button.go{background:var(--brand-fill);color:#fff;border-color:transparent;font-weight:600}
+.err{color:var(--danger);font-size:14px;line-height:1.7;text-align:left;white-space:pre-wrap}
 
 
 /* ⋯ 浮层里的「移到第几步」：点数字就行，不用打字 */
@@ -164,13 +169,13 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   width:44px;height:44px;border-radius:12px;
   background:var(--bg);border:1px solid var(--line);color:var(--ink);font-size:16px;
 }
-.chip.now{background:var(--brand);color:#fff;border-color:transparent;font-weight:600}
+.chip.now{background:var(--brand-fill);color:#fff;border-color:transparent;font-weight:600}
 .stack{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .stack button{
   height:var(--tap);border-radius:12px;font-size:16px;
   border:1px solid var(--line);background:var(--bg);color:var(--ink);
 }
-.stack button.danger{color:#c1121f}
+.stack button.danger{color:var(--danger)}
 
 
 /* ── 二维码搬设置 ─────────────────────────────────── */
@@ -235,6 +240,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   flex:0 0 auto;font-size:13px;color:var(--muted);
   padding:0 8px;white-space:nowrap;
 }
+.savetag.bad{color:var(--danger);font-weight:600}   /* 草稿没存上：要一直看得见（审查 P3-9） */
 
 /* 设置弹层里的分隔线与次要操作 */
 .sep{border:0;border-top:1px solid var(--line);margin:16px 0 12px}

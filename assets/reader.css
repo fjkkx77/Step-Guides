@@ -21,7 +21,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
    右边的按钮靠 margin-left:auto 推到最右 */
 .top .count{
   flex:0 0 auto;min-width:0;padding:2px 8px;border-radius:999px;
-  background:rgba(120,120,130,.12);color:var(--muted);
+  background:rgba(120,120,130,.12);color:var(--count-ink);
   font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums;white-space:nowrap;
 }
 .top .count + *{margin-left:auto}
@@ -101,6 +101,10 @@ html[data-mode="long"] .done .again{
   .top .count{padding:2px 7px}
   .top .modebtn,.top .stepsbtn{padding:0 7px;gap:3px}
 }
+/* 进度小字：灰底上原来的 --muted 只有 3.98:1（审查 P2-9），浅色加深一点；深色本来就够 */
+:root{--count-ink:#58585E}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){--count-ink:var(--muted)} }
+:root[data-theme="dark"]{--count-ink:var(--muted)}
 .modebtn{
   flex:0 0 auto;height:var(--tap);min-width:var(--tap);padding:0 12px;border-radius:12px;
   font-size:14px;color:var(--brand);display:flex;align-items:center;gap:5px;
@@ -148,10 +152,11 @@ html[data-mode="long"] .done .again{
   flex:0 0 auto;
   display:inline-flex;align-items:center;justify-content:center;
   min-width:26px;height:26px;padding:0 8px;border-radius:13px;
-  background:var(--brand);color:#fff;font-size:14px;font-weight:600;line-height:1;
+  background:var(--brand-fill);color:#fff;font-size:14px;font-weight:600;line-height:1;
 }
-.say h2{margin:0;font-size:17px;font-weight:600;line-height:1.4}
-.say p{margin:0;font-size:16px;line-height:1.72;color:var(--ink2);white-space:pre-wrap}
+.say h2{margin:0;font-size:17px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+/* 网址、密码、序列号这类不断行的长串要能断开，否则整页左右晃（审查 P2-10） */
+.say p{margin:0;font-size:16px;line-height:1.72;color:var(--ink2);white-space:pre-wrap;overflow-wrap:anywhere}
 
 /* step 模式下正文默认只给 3 行：长说明会把截图挤到看不清（320 档实测能挤到 100px 宽）。
    想看全文点一下。long 模式不裁，那里本来就是拿来细看的。 */

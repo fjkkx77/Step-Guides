@@ -1,2 +1,6 @@
 User-agent: *
-Disallow: /
+# 页面本身允许抓取：搜索引擎得先抓到页面，才看得见页面里的 noindex（Google 搜索中心 block-indexing 原文）。
+# 以前全站 Disallow，反而让它看不见 noindex，别处链接过来时仍可能把网址收进搜索结果（审查 P3-8）。
+# 截图和数据文件不让抓。
+Disallow: /t/*/i/
+Disallow: /*.json$

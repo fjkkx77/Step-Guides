@@ -7,6 +7,8 @@ const PORT = 8879;
 const OWNER = 'fjkkx77', REPO = 'Step-Guides';
 
 (async () => {
+  // 会往真仓库写（发完再删，但仓库里会留下提交、两边各触发一次部署）：必须明说要真测才跑
+  if (!process.argv.includes('--real')) { console.log('这个脚本会往真仓库提交。确定要跑就加 --real：node tools/smoke-publish.js --real'); process.exit(0); }
   const token = execSync('gh auth token', { encoding: 'utf8' }).trim();
   if (!token) throw new Error('取不到 gh token');
 

@@ -1,5 +1,5 @@
 /* 教程库的删除：UI 到位 + 真删一次（先发一份临时教程，删完确认仓库里没了）
-   会真的往仓库写两次（发布 + 删除），跑完不留痕。 */
+   会真的往仓库写两次（发布 + 删除）：内容删干净了，但仓库里会留下两条提交、两边各触发部署。要加 --real 才跑。 */
 const { open, sleep } = require('./cdp.js');
 const { execSync } = require('child_process');
 const PORT = 8879;
@@ -13,8 +13,10 @@ const waitFor = async (c, expr, n = 40) => {
 (async () => {
   let bad = 0;
   const chk = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${n}${d ? ' — ' + d : ''}`); if (!ok) bad++; };
+  if (!process.argv.includes('--real')) { console.log('这个脚本会往真仓库提交。确定要跑就加 --real：node tools/verify-delete.js --real'); process.exit(0); }
   const token = execSync('gh auth token', { encoding: 'utf8' }).trim();
-  const id = 'zztest' + Math.random().toString(36).slice(2, 4);
+  // 编号要符合编号字母表，教程库只显示像编号的条目（审查 P1-4）
+  const id = 'zztest' + [0, 1].map(() => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)]).join('');
 
   // ① 先发一份临时教程（直接用 publish，不走写作页，省时间）
   const c = await open(1100, 800, 1);

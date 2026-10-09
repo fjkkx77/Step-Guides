@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111114" media="(prefers-color-scheme: dark)">
 <title>我的教程</title>
+<script src="../assets/primary.js"></script>
 <link rel="stylesheet" href="../assets/base.css">
 <link rel="stylesheet" href="../assets/writer.css">
 <style>
@@ -15,12 +16,12 @@
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
     padding:12px 14px;margin-bottom:10px;
   }
-  .card h2{margin:0 0 2px;font-size:17px;font-weight:600;line-height:1.4}
-  .card .meta{font-size:13px;color:var(--muted)}
+  .card h2{margin:0 0 2px;font-size:17px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+  .card .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
   /* 刚发布完跳过来的那一份：描一圈品牌色，闪两下，一眼能找到 */
   .card.fresh{border-color:var(--brand);box-shadow:0 0 0 3px rgba(91,87,216,.18);animation:fresh 1.2s ease 2}
   .card .newtag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;font-size:12px;
-    font-weight:600;color:#fff;background:var(--brand);vertical-align:2px}
+    font-weight:600;color:#fff;background:var(--brand-fill);vertical-align:2px}
   @keyframes fresh{50%{box-shadow:0 0 0 7px rgba(91,87,216,.08)}}
   @media (prefers-reduced-motion: reduce){ .card.fresh{animation:none} }
   .card .ops{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
@@ -29,14 +30,17 @@
     background:var(--bg);border:1px solid var(--line);color:var(--ink);
     display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
   }
-  .card .ops .go{background:var(--brand);color:#fff;border-color:transparent}
-  .card .ops .danger{color:#b0271e}
-  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .card .ops .danger{color:#ff8a80} }
+  .card .ops .go{background:var(--brand-fill);color:#fff;border-color:transparent}
+  .card .ops .danger{color:var(--danger)}
+  /* 草稿卡：虚线边，跟已发布的区分开 */
+  .card.draft{border-style:dashed}
+  .sect{margin:6px 4px 8px;font-size:13px;font-weight:600;color:var(--muted)}
   .pagetitle{flex:1;min-width:0;margin:0;font-size:17px;font-weight:600}
   .wtop .iconbtn#btn-home{font-size:26px;line-height:1}
   .prog{padding:20px 18px;text-align:center}
   .prog .big{font-size:17px;font-weight:600;margin-bottom:8px}
-  .prog .msg{font-size:14px;color:var(--muted);line-height:1.7;word-break:break-all}
+  .prog .msg{font-size:14px;color:var(--muted);line-height:1.7;word-break:break-all;white-space:pre-line}
+  .empty .tap{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;margin-top:12px;height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px}
 </style>
 </head>
 <body>
@@ -49,11 +53,12 @@
 
 <main class="list" id="list"><div class="empty">正在读取…</div></main>
 
-<!-- 删除确认：破坏性操作必须二次确认，且不用原生 confirm -->
+<!-- 删除确认：破坏性操作必须二次确认，且不用原生弹框 -->
 <dialog id="dlg-del">
   <div class="sheet">
     <h2 id="del-title">删除这份教程？</h2>
-    <p>教程的文字和图片会从仓库里一起删掉，<b>已经发出去的链接会立刻失效</b>，这个动作没法撤销。</p>
+    <p>教程的文字和图片会从网站上删掉，<b>已经发出去的链接会失效</b>（构建要几十秒）。
+       仓库是公开的，Git 的历史记录里还会留着这份内容；里面真有不能给人看的东西，告诉我，要另外清历史。</p>
     <div class="row">
       <button class="tap" id="del-no" type="button">取消</button>
       <button class="tap danger-solid" id="del-yes" type="button">删除</button>
@@ -70,25 +75,58 @@
 </dialog>
 
 <script src="../assets/github.js"></script>
+<script src="../assets/store.js"></script>
+<script src="../assets/ui.js"></script>
 <script>
 (async () => {
   const $ = s => document.querySelector(s);
   const list = $('#list');
+  const G = window.SGGitHub, UI = window.SGUI;
   $('#btn-new').onclick = () => location.href = '../w/';
   $('#btn-home').onclick = () => location.href = '../';
 
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
   const cfg = (() => { try { return JSON.parse(localStorage.getItem('sg.cfg') || '{}'); } catch (e) { return {}; } })();
+  const hasCfg = !!(cfg.owner && cfg.repo && cfg.token);
+  const repo = { token: cfg.token, owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main' };
 
-  let items = [];
+  let items = [], drafts = [];
 
+  /* 小工具：用 DOM 拼卡片，所有文字一律 textContent（审查 P1-4：以前用字符串拼 innerHTML，
+     目录里混进带 HTML 的编号/标题就会被执行） */
+  const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
+  const btn = (label, cls, data) => { const b = el('button', 'tap' + (cls ? ' ' + cls : ''), label); b.type = 'button'; Object.assign(b.dataset, data || {}); return b; };
+  const link = (label, cls, href) => { const a = el('a', 'tap' + (cls ? ' ' + cls : ''), label); a.href = href; return a; };
+  /** 本地时间的「年-月-日」（审查 P3-4：以前截的是世界时，北京时间早上 8 点前发布的会显示成前一天） */
+  const day = iso => { const d = new Date(iso); if (isNaN(d)) return ''; const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+  const when = t => t ? new Date(t).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+  /* ── 草稿（存在这台设备上，跟有没有 token 无关；建议 O-1） ── */
+  async function loadDrafts() {
+    try { drafts = (await SGStore.list()).filter(d => d.steps && d.steps.length); } catch (e) { drafts = []; }
+  }
+  function draftCard(d) {
+    const editing = d.slot.startsWith('edit:');
+    const card = el('article', 'card draft');
+    card.append(el('h2', null, d.title || '未命名'),
+                el('div', 'meta', `${editing ? '已发布教程的修改，还没发布' : '草稿'} · ${d.steps.length} 步 · 保存于 ${when(d.savedAt)}`));
+    const ops = el('div', 'ops');
+    const href = editing ? '../w/?edit=' + encodeURIComponent(d.slot.slice(5)) : '../w/?draft=' + encodeURIComponent(d.slot.slice(4));
+    ops.append(link(editing ? '接着改' : '接着写', 'go', href), btn('🗑 删除草稿', 'danger', { dropDraft: d.slot }));
+    card.appendChild(ops);
+    return card;
+  }
+
+  /* ── 已发布的教程：只在填了发布设置的设备上显示（审查 P1-1）。
+     以前谁打开这一页都能看到全部教程——收到一条教程链接的人点 ‹ 回首页、再点进来就全看见了。
+     现在目录用 token 直接从仓库读（也就总是最新的，不会读到网站上还没更新的旧版） */
   async function load() {
+    await loadDrafts();
+    if (!hasCfg) { items = null; render(); return; }
     try {
-      const r = await fetch('../list.json?cb=' + Date.now(), { cache: 'no-store' });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      items = await r.json();
+      items = await G.readIndex(repo, repo.branch);
     } catch (e) {
-      list.innerHTML = '<div class="empty">还没有 list.json（发布第一份教程后就会自动生成）</div>';
+      items = undefined;
+      render(e);
       return;
     }
     render();
@@ -104,29 +142,50 @@
     if (!card) return;
     card.classList.add('fresh');
     const h = card.querySelector('h2');
-    if (h) h.insertAdjacentHTML('beforeend', '<span class="newtag">刚发布</span>');
+    if (h) h.appendChild(el('span', 'newtag', '刚发布'));
     card.scrollIntoView({ block: 'center' });
   }
 
-  function render() {
-    if (!items.length) {
-      list.innerHTML = '<div class="empty">还没有发布过教程。<br>点右上角的 ＋ 开始写第一份。</div>';
-      return;
+  function render(err) {
+    const out = [];
+    if (drafts.length) {
+      out.push(el('div', 'sect', `草稿（${drafts.length}）`), ...drafts.map(draftCard));
     }
-    list.innerHTML = items.map(it => {
-      const url = '../t/' + it.id + '/';
-      const when = (it.updated || '').slice(0, 10);
-      return `<article class="card" data-id="${esc(it.id)}">
-        <h2>${esc(it.title)}</h2>
-        <div class="meta">${it.steps} 步 · ${when} · /t/${esc(it.id)}/</div>
-        <div class="ops">
-          <a class="go tap" href="${url}">打开</a>
-          <button class="tap" data-copy="${url}" type="button">复制链接</button>
-          <a class="tap" href="../w/?edit=${esc(it.id)}">编辑</a>
-          <button class="tap danger" data-del="${esc(it.id)}" type="button">🗑 删除</button>
-        </div>
-      </article>`;
-    }).join('');
+    if (items === null) {
+      const box = el('div', 'empty', '这台设备还没填发布设置，所以这里不显示已发布的教程。\n' +
+        '（这样做是为了：拿到某一条教程链接的人，看不到你别的教程。）');
+      box.style.whiteSpace = 'pre-line';
+      const b = link('去填发布设置', null, '../w/');
+      box.append(el('br'), b);
+      out.push(box);
+    } else if (items === undefined) {
+      // 读失败要说读失败，不能说「还没有」——那会让人以为教程全没了（审查 P3-11）
+      const box = el('div', 'empty', '读不到教程列表：\n' + G.explain(err));
+      box.style.whiteSpace = 'pre-line';
+      const b = btn('重试', null, {});
+      b.onclick = () => { list.replaceChildren(el('div', 'empty', '正在读取…')); load(); };
+      box.append(el('br'), b);
+      out.push(box);
+    } else {
+      // 编号不像编号的一律不显示（防止被改过的目录里混进奇怪的东西）
+      const ok = items.filter(it => it && G.isId(it.id));
+      if (!ok.length) out.push(el('div', 'empty', '还没有发布过教程。点右上角的 ＋ 开始写第一份。'));
+      if (ok.length && drafts.length) out.push(el('div', 'sect', `已发布（${ok.length}）`));
+      for (const it of ok) {
+        const url = '../t/' + it.id + '/';
+        const card = el('article', 'card');
+        card.dataset.id = it.id;
+        const steps = Number.isFinite(+it.steps) ? +it.steps : '?';
+        card.append(el('h2', null, String(it.title || '未命名')),
+                    el('div', 'meta', `${steps} 步 · ${day(it.updated)} · /t/${it.id}/`));
+        const ops = el('div', 'ops');
+        ops.append(link('打开', 'go', url), btn('复制链接', null, { copy: url }),
+                   link('编辑', null, '../w/?edit=' + it.id), btn('🗑 删除', 'danger', { del: it.id }));
+        card.appendChild(ops);
+        out.push(card);
+      }
+    }
+    list.replaceChildren(...out);
   }
 
   list.addEventListener('click', async e => {
@@ -134,16 +193,25 @@
     if (copy) {
       const abs = new URL(copy.dataset.copy, location.href).href;
       try { await navigator.clipboard.writeText(abs); copy.textContent = '已复制 ✓'; }
-      catch (err) { prompt('手动复制：', abs); }
+      catch (err) { UI.copyText(abs); }
       return;
     }
     const del = e.target.closest('button[data-del]');
-    if (del) askDelete(del.dataset.del);
+    if (del) { askDelete(del.dataset.del); return; }
+    const drop = e.target.closest('button[data-drop-draft]');
+    if (drop) {
+      const d = drafts.find(x => x.slot === drop.dataset.dropDraft);
+      const yes = await UI.ask({ title: `删掉草稿「${(d && d.title) || '未命名'}」？`, msg: '图片和文字都会清掉，没法撤销。已经发布的教程不受影响。', ok: '删掉', danger: true });
+      if (!yes) return;
+      await SGStore.clear(drop.dataset.dropDraft).catch(() => {});
+      await loadDrafts();
+      render();
+    }
   });
 
   /* ── 删除 ────────────────────────────────────────── */
   function askDelete(id) {
-    const it = items.find(x => x.id === id);
+    const it = (items || []).find(x => x.id === id);
     if (!it) return;
     $('#del-title').textContent = `删除「${it.title}」？`;
     $('#del-no').onclick = () => $('#dlg-del').close();
@@ -152,14 +220,9 @@
   }
 
   async function doDelete(it) {
-    if (!cfg.owner || !cfg.repo || !cfg.token) {
-      alert('还没填发布设置。先去写作页右上角的 ⚙ 里填好 GitHub 用户名、仓库和 token。');
-      location.href = '../w/';
-      return;
-    }
     const dlg = $('#dlg-prog');
     const row = $('#p-row');
-    row.hidden = true; row.innerHTML = '';
+    row.hidden = true; row.replaceChildren();
     $('#p-title').textContent = '正在删除…';
     $('#p-msg').textContent = '在数这份教程有哪些文件';
     dlg.showModal();
@@ -167,36 +230,35 @@
     try {
       // 直接问仓库这个目录下到底有哪些文件，别靠读 data.json 推断图片：
       // data.json 万一读不到，图片就会被漏在仓库里变成孤儿（测试时撞到过）
-      const paths = await window.SGGitHub.listTree({
-        token: cfg.token, owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main',
-        prefix: `t/${it.id}/`
-      });
+      const paths = await G.listTree({ ...repo, prefix: `t/${it.id}/` });
       const files = paths.map(path => ({ path, sha: null }));
 
-      const next = items.filter(x => x.id !== it.id);
-      const b64 = str => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
-      files.push({ path: 'list.json', content: b64(JSON.stringify(next, null, 1)) });
-
       $('#p-msg').textContent = `这份教程有 ${files.length} 个文件，正在删…`;
-      await window.SGGitHub.publish({
-        token: cfg.token, owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main',
-        files, message: `删除教程：${it.title}`,
+      await G.publish({
+        ...repo, files, message: `删除教程：${it.title}`,
+        // 目录在提交那一轮从仓库当前版本读、删掉这一条再写（审查 P1-2：以前拿打开页面时读到的旧列表整份写回）
+        index: lst => lst.filter(x => x && x.id !== it.id),
         onProgress: p => { $('#p-msg').textContent = p.phase; }
       });
+      // 这份教程在本机的编辑草稿也一起清掉，免得以后恢复草稿把它「复活」（审查 P3-12）
+      await SGStore.clear('edit:' + it.id).catch(() => {});
 
       $('#p-title').textContent = '已从仓库删除';
       $('#p-msg').textContent = '线上页面要等一会儿才会真的打不开（构建需要几十秒）。';
-      items = next;
+      items = items.filter(x => x.id !== it.id);
+      await loadDrafts();
       render();
       row.hidden = false;
-      row.innerHTML = '<button class="tap go" id="p-ok" type="button">知道了</button>';
-      $('#p-ok').onclick = () => dlg.close();
+      const ok = btn('知道了', 'go', {}); ok.id = 'p-ok';
+      ok.onclick = () => dlg.close();
+      row.appendChild(ok);
     } catch (err) {
       $('#p-title').textContent = '删除失败';
-      $('#p-msg').textContent = err.message + '\n（仓库没有被改动，教程还在）';
+      $('#p-msg').textContent = G.explain(err) + '\n（仓库没有被改动，教程还在）';
       row.hidden = false;
-      row.innerHTML = '<button class="tap" id="p-ok2" type="button">关掉</button>';
-      $('#p-ok2').onclick = () => dlg.close();
+      const b = btn('关掉', null, {}); b.id = 'p-ok2';
+      b.onclick = () => dlg.close();
+      row.appendChild(b);
     }
   }
 

@@ -172,7 +172,8 @@
     // 空字符串也会命中 html[data-fx] 选择器，关掉必须把属性整个删掉
     if (FX) document.documentElement.dataset.fx = FX;
     else delete document.documentElement.dataset.fx;
-    requestAnimationFrame(() => { measureClamp(); parallax(); paintSegs(); playEnter(cur); if (addSides.fit) addSides.fit(); });
+    requestAnimationFrame(() => { measureClamp(); parallax(); paintSegs(); playEnter(cur); if (addSides.fit) addSides.fit(); restorePos(); });
+    preload();
     /* 裁几行是跟视口高度走的（矮屏 3→2→1 行），所以转屏/改窗口后必须重量一次，
        否则横过来明明放得下却还挂着「更多」，或者竖回去被裁了却没提示 */
     let mt = 0;
@@ -231,7 +232,10 @@
     if (mode() === 'step') {
       $('#deck').scrollTo({ left: page.offsetLeft, behavior: smooth ? 'smooth' : 'auto' });
     } else {
-      page.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+      // 长文模式顶栏是吸顶的：直接 scrollIntoView 会把这一步的开头压在顶栏下面（审查 P3-3），要让开顶栏的高度
+      const top = $('.top');
+      const y = page.getBoundingClientRect().top + scrollY - (top ? top.offsetHeight : 0) - 8;
+      scrollTo({ top: Math.max(0, y), behavior: smooth ? 'smooth' : 'auto' });
     }
     cur = i;
     paint();
@@ -292,6 +296,8 @@
 
     if (cur !== lastCur) {
       lastCur = cur;
+      savePos();
+      preload();
       /* 给当前这一页打标记：序号徽章的弹入动画挂在 .is-cur 上。
          先摘掉再加，动画才会重新播（不摘的话 CSS 动画只播一次） */
       document.querySelectorAll('.page.is-cur').forEach(p => p.classList.remove('is-cur'));
@@ -305,6 +311,33 @@
   }
 
   const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── 记住看到第几步（审查 P2-7） ─────────────────────
+     看教程的人是「看一步 → 切去『设置』照做 → 切回来」。手机内存紧时浏览器（尤其微信里）会把页面重新加载，
+     以前一重载就回到第 1 步。现在每翻一步记一下，12 小时内重新打开回到这一步。
+     记在本机，不写进地址：地址里带着步数的话，复制给别人的链接会从中间开始 */
+  const POS_KEY = 'sg.pos:' + location.pathname;
+  const POS_TTL = 12 * 3600 * 1000;
+  let posReady = false;                 // 恢复完之前别写，免得首屏的「第 1 步」把记录冲掉
+  function savePos() {
+    if (!posReady || window.__DATA) return;
+    try { localStorage.setItem(POS_KEY, JSON.stringify({ i: cur, t: Date.now() })); } catch (e) { /* 隐私模式 */ }
+  }
+  function restorePos() {
+    let p = null;
+    try { p = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch (e) { p = null; }
+    posReady = true;
+    if (!p || window.__DATA || !(p.i > 0) || p.i >= steps.length || Date.now() - p.t > POS_TTL) return;
+    goto(p.i, false);
+  }
+
+  /* 提前加载当前步后面两步的图（建议 O-4）：只靠浏览器的懒加载，慢网下翻到下一步会先白一下 */
+  function preload() {
+    for (const k of [cur + 1, cur + 2]) {
+      const im = document.querySelector(`.page[data-i="${k}"] .shot img`);
+      if (im && im.loading === 'lazy') im.loading = 'eager';
+    }
+  }
 
   /* 分段进度：一步一格。12 步时连续条每格只动 8%，肉眼看不出进展；分段能一眼看到"还剩几格" */
   let segs = null;
@@ -593,6 +626,13 @@
   }
 
   function boot() {
+    /* 地址少了结尾的「/」（手打链接时很常见）：Vercel 不会自动补，相对路径的 data.json 就会去取 /t/data.json，
+       页面显示 404（审查 P2-14）。补上斜杠再加载一次。github.io 自己会补，导出/预览不走这里 */
+    if (!window.__DATA && /^https?:$/.test(location.protocol) && !location.pathname.endsWith('/') &&
+        !location.pathname.split('/').pop().includes('.')) {
+      location.replace(location.pathname + '/' + location.search + location.hash);
+      return;
+    }
     liftCount();
     addBack();
     addFirst();

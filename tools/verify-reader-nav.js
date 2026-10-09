@@ -5,6 +5,8 @@
    ③ 电脑宽屏：左右两侧整条翻页热区；窄屏/长文模式不出现；内容不被热区盖住
    用法：node tools/verify-reader-nav.js [--base=https://jc.wbztl.xyz]（②③ 可验线上；① 只在本地跑） */
 const { open, sleep } = require('./cdp.js');
+const { shim } = require('./fake-github.js');
+const SHIM = shim(require('path').resolve(__dirname, '..'));
 const PORT = 8879;
 const BASE = (process.argv.find(a => a.startsWith('--base=')) || '').split('=').slice(1).join('=');
 const ROOT = BASE ? BASE.replace(/\/$/, '') : `http://127.0.0.1:${PORT}`;
@@ -69,9 +71,14 @@ async function phone(w, h) {
     const p1 = await c.ev(`location.pathname`);
     chk(`${L} 直接打开的链接：返回键回首页`, p1 === '/' || /\/Step-Guides\/$/.test(p1), p1);
 
-    // 从教程库点进来 → 返回 = 回教程库
-    await c.goto(ROOT + '/mine/'); await waitFor(c, `!!document.querySelector('.card a.go')`);
-    await c.ev(`document.querySelector('.card a.go').click()`); await sleep(400); await ready(c);
+    // 从教程库点进来 → 返回 = 回教程库。
+    // 2026-10-09 起教程库只在有 token 的设备上列出教程（审查 P1-1），这里给一个假 token + 假 GitHub
+    if (!BASE) {
+      await c.send('Page.addScriptToEvaluateOnNewDocument', { source: SHIM });
+      await c.ev(`localStorage.setItem('sg.cfg', JSON.stringify({ owner: 'fake', repo: 'Step-Guides', branch: 'main', token: 'github_pat_FAKE' }))`);
+    }
+    await c.goto(ROOT + '/mine/'); await waitFor(c, `!!document.querySelector('.card:not(.draft) a.go')`);
+    await c.ev(`document.querySelector('.card:not(.draft) a.go').click()`); await sleep(400); await ready(c);
     await c.ev(`document.getElementById('backbtn').click()`); await sleep(1200);
     const p2 = await c.ev(`location.pathname`);
     chk(`${L} 从教程库点进来：返回键回教程库`, /\/mine\/$/.test(p2), p2);
@@ -133,33 +140,16 @@ async function publishFlow() {
   if (BASE) { console.log('（发布流程只在本地验，跳过）'); return; }
   for (const how of ['open', 'mine', 'esc']) {
     const c = await open(390, 844, 2);
+    // 2026-10-09：用共享的假 GitHub（tools/fake-github.js），它会从「仓库」读目录、回显本次发布的 rev
+    await c.send('Page.addScriptToEvaluateOnNewDocument', { source: SHIM });
     try {
       // 设置是页面启动时读进内存的：必须先写好再刷新，否则点发布会弹"先填 token"的 alert 把测试卡死
       await c.goto(ROOT + '/w/'); await sleep(500);
       await c.ev(`localStorage.setItem('sg.cfg', JSON.stringify({ owner: 'fake', repo: 'Step-Guides', branch: 'main', token: 'github_pat_FAKE' }))`);
       await c.goto(ROOT + '/w/'); await sleep(900);
       await c.ev(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
-      await c.ev(`window.alert = m => { window.__alert = m; }; window.prompt = () => null;`);   // 原生弹窗会卡死自动化
       const ok = await c.ev(`(async () => {
         const real = window.fetch.bind(window);
-        const J = o => new Response(JSON.stringify(o), { status: 200, headers: { 'content-type': 'application/json' } });
-        window.__calls = [];
-        window.fetch = async (u, opt) => {
-          const url = String(u);
-          if (url.startsWith('https://api.github.com')) {
-            __calls.push((opt && opt.method || 'GET') + ' ' + url.replace('https://api.github.com', ''));
-            if (/\\/git\\/ref\\/heads\\//.test(url)) return J({ object: { sha: 'head' } });
-            if (/\\/git\\/commits\\/head$/.test(url)) return J({ sha: 'head', tree: { sha: 'tree0' } });
-            if (/\\/git\\/trees\\/tree0/.test(url)) return J({ sha: 'tree0', tree: [] });
-            if (/\\/git\\/blobs$/.test(url)) return J({ sha: 'blob' + __calls.length });
-            if (/\\/git\\/trees$/.test(url)) return J({ sha: 'tree1' });
-            if (/\\/git\\/commits$/.test(url)) return J({ sha: 'c1' });
-            if (/\\/git\\/refs\\/heads\\//.test(url)) return J({ object: { sha: 'c1' } });
-            return J({});
-          }
-          if (url.includes('github.io')) return url.includes('list.json') ? J([]) : J({ ok: 1 });
-          return real(u, opt);
-        };
         // 造一份一步的草稿（用一张现成的站内截图）
         const b = await (await real('../t/qhftq5kz/i/' + (await (await real('../t/qhftq5kz/data.json')).json()).steps[0].img)).blob();
         await SGWriter.addFiles([new File([b], 'a.webp', { type: 'image/webp' })]);
@@ -168,13 +158,14 @@ async function publishFlow() {
         return true;
       })()`);
       await sleep(600);
+      const hist0 = await c.ev(`history.length`);   // 发布前的历史条数：跳走用 replace 的话不会变
       await c.ev(`document.getElementById('btn-publish').click()`);
       const done = await waitFor(c, `!!document.getElementById('p-open')`, 80);
       chk(`发布成功（假 GitHub）后出现去向按钮 [${how}]`, done,
           await c.ev(`document.getElementById('p-title').textContent + ' ' + (window.__alert || '')`));
       if (!done) continue;
       const ui = JSON.parse(await c.ev(`JSON.stringify({ btns: [...document.querySelectorAll('#p-row button')].map(b => b.textContent.trim()),
-        calls: __calls.filter(x => !x.startsWith('GET')).length })`));
+        calls: __gh.calls.filter(x => !x.startsWith('GET')).length })`));
       if (how === 'open') chk('成功弹窗按钮：复制链接 / 我的教程 / 查看教程', ['复制链接', '📚 我的教程', '查看教程 ›'].every(t => ui.btns.includes(t)), ui.btns.join(' | '));
       const id = await c.ev(`(document.querySelector('#p-row a') || {}).href || ''`);
       const tid = (/\/t\/([a-z0-9]+)\//.exec(id) || [])[1];
@@ -187,12 +178,16 @@ async function publishFlow() {
       else chk(`${how === 'mine' ? '点「我的教程」' : '直接关掉弹窗'} → 去教程库并带上新教程 id`,
                /\/mine\//.test(at) || at.includes('/mine/?new=' + tid), at);
       const hist = await c.ev(`history.length`);
-      if (how === 'open') chk('用 replace 跳转（返回不会退回过期的写作页）', hist <= 2, `history.length=${hist}`);
+      if (how === 'open') chk('用 replace 跳转（返回不会退回过期的写作页）', hist === hist0, `history.length ${hist0} → ${hist}`);
     } finally { await c.close(); }
   }
   // 教程库的高亮（用一个真实存在的 id）
   const c = await open(390, 844, 2);
+  await c.send('Page.addScriptToEvaluateOnNewDocument', { source: SHIM });
   try {
+    // 教程库只在有 token 的设备上列出已发布的教程（审查 P1-1）
+    await c.goto(ROOT + '/mine/');
+    await c.ev(`localStorage.setItem('sg.cfg', JSON.stringify({ owner: 'fake', repo: 'Step-Guides', branch: 'main', token: 'github_pat_FAKE' }))`);
     // 样例教程不在 list.json 里，拿列表里真实存在的第一份来验
     const lid = JSON.parse(require('fs').readFileSync(__dirname + '/../list.json', 'utf8'))[0].id;
     await c.goto(ROOT + '/mine/?new=' + lid); await waitFor(c, `!!document.querySelector('.card')`); await sleep(400);
