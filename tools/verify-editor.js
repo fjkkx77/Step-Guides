@@ -56,11 +56,13 @@ const SEED = `(async () => {
   })`));
   chk('换图弹层打开', sw.open === true, sw.title);
   chk('换图有「选文件」和「粘贴剪贴板」两个键', sw.filePick && sw.clip);
-  chk('换图弹层里平时看不到粘贴框', (await c.ev(`document.getElementById('swap-paste').hidden`)) === true);
+  // 2026-10-10 起粘贴框一直显示（以前要先点「粘贴剪贴板」、失败了才露出来，用户嫌多此一举）
+  const pbox = JSON.parse(await c.ev(`(() => { const r = document.getElementById('swap-paste').getBoundingClientRect(), d = document.getElementById('dlg-swap').getBoundingClientRect();
+    return JSON.stringify({ h: r.height, in: r.top >= d.top && r.bottom <= d.bottom + 1 && r.left >= d.left && r.right <= d.right + 1 }); })()`));
+  chk('换图弹层一打开就看得到粘贴框（热区 ≥44px、在弹层内）', pbox.h >= 44 && pbox.in, '高 ' + Math.round(pbox.h));
 
   // 用粘贴换图：往粘贴框里派发一个带文件的 paste
   const swapped = await c.ev(`(async () => {
-    document.getElementById('swap-paste').hidden = false;   // 模拟"读不到剪贴板"时的兜底路径
     const before = window.SGWriter.draft.steps[0].key + '|' + window.SGWriter.draft.steps[0].w;
     const b = await fetch('../t/qhftq5kz/i/09.webp').then(r => r.blob());
     const dt = new DataTransfer();

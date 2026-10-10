@@ -265,14 +265,12 @@ ${image ? `<meta property="og:image" content="${esc(image)}">\n` : ''}<link rel=
     pick.onchange = () => done(pick.files[0]);
 
     const box = $('#swap-paste');
-    box.textContent = '';
-    box.hidden = true;                       // 有「粘贴剪贴板」按钮就够了，平时不占版面
+    box.textContent = '';                    // 粘贴框一直在（2026-10-10：以前要先点按钮、失败了才露出来）
 
     $('#swap-clip').onclick = async () => {
       const f = await readClipboardImage({ quiet: true });
       if (f) { done(f); return; }
-      box.hidden = false;                    // 这条路走不通才亮出兜底的框
-      box.focus();
+      box.focus();                           // 读不到剪贴板：把光标放进粘贴框，接着长按/右键粘贴就行
     };
 
     box.onpaste = e => {
@@ -874,17 +872,24 @@ ${zoomCss}</style></head>
   async function pasteFromClipboard() {
     const f = await readClipboardImage({ quiet: true });
     if (f) { await addFiles([f]); return; }
-    // 这条路走不通（浏览器不支持 / 用户拒绝 / 剪贴板里不是图），才亮出兜底的粘贴框
-    const box = $('#pastebox');
-    box.hidden = false;
-    box.focus();
-    $('#addhint').textContent = '读不到剪贴板 —— 在下面的框里长按，选「粘贴」';
+    // 这条路走不通（浏览器不支持 / 用户拒绝 / 剪贴板里不是图）：指到下面那个一直在的粘贴框
+    $('#pastebox').focus();
+    $('#addhint').textContent = FINE ? '读不到剪贴板 —— 直接按 Ctrl+V，或在下面的框里右键选「粘贴」'
+                                     : '读不到剪贴板 —— 在下面的框里长按，选「粘贴」';
   }
+
+  /* 粘贴框上的提示语按设备说：手机是长按，电脑是右键 / Ctrl+V（苹果电脑是 ⌘V）。
+     按"有没有精确指针"分，不按屏幕宽度分——窄窗口的电脑照样是右键 */
+  const FINE = matchMedia('(pointer: fine)').matches;
+  const PASTE_HINT = FINE ? '在这个框里右键 → 选「粘贴」，或直接按 Ctrl+V（Mac 是 ⌘V）' : '在这个框里长按 → 选「粘贴」';
 
   /** 粘贴框：既接 paste 事件里的文件，也兜住「图片被直接塞进框里」的情况（iOS 有时这样） */
   function wirePasteBox() {
     const box = $('#pastebox');
     if (!box) return;
+    box.dataset.ph = PASTE_HINT;
+    const sw = $('#swap-paste');
+    if (sw) sw.dataset.ph = PASTE_HINT;
     box.addEventListener('paste', async e => {
       // 全局那个 Ctrl+V 监听也会收到这个事件（冒泡），不拦的话同一张图会被加两次
       e.stopPropagation();

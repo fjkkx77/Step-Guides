@@ -17,7 +17,7 @@
 <header class="wtop">
   <button class="iconbtn tap" id="btn-back" type="button" aria-label="返回上一页">‹</button>
   <button class="iconbtn tap" id="btn-home2" type="button" aria-label="回首页">🏠</button>
-  <input id="title" type="text" placeholder="教程标题，例如：教你设置专注模式" autocomplete="off">
+  <input id="title" type="text" placeholder="给教程起个标题" autocomplete="off">
   <span class="savetag" id="savetag" hidden>已保存</span>
   <button class="iconbtn tap" id="btn-settings" type="button" aria-label="设置">⚙</button>
 </header>
@@ -32,8 +32,8 @@
     <button class="addbtn tap ghost" id="btn-clip" type="button">📋 粘贴图片</button>
   </div>
   <input id="pick" type="file" accept="image/*" multiple hidden>
-  <!-- 平时收起来。只有"读剪贴板"这条路走不通时才亮出来当兜底 -->
-  <div class="pastebox" id="pastebox" contenteditable="true" role="textbox" hidden
+  <!-- 一直显示（2026-10-10 用户：别让我先点按钮、等框弹出来再粘）。提示语按设备在 writer.js 里换 -->
+  <div class="pastebox" id="pastebox" contenteditable="true" role="textbox"
        aria-label="在这里长按然后选粘贴" data-ph="在这个框里长按 → 选「粘贴」"></div>
 </div>
 
@@ -131,7 +131,7 @@
       <button class="tap" id="swap-clip" type="button">📋 粘贴剪贴板里的图</button>
     </div>
     <div class="pastebox" id="swap-paste" contenteditable="true" role="textbox"
-         aria-label="在这里长按然后选粘贴" data-ph="或在这个框里长按 → 选「粘贴」"></div>
+         aria-label="在这里长按然后选粘贴" data-ph="在这个框里长按 → 选「粘贴」"></div>
     <div class="row"><button class="tap" id="swap-cancel" type="button">取消</button></div>
   </div>
 </dialog>

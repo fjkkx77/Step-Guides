@@ -521,7 +521,7 @@ const CASES = {
       await newDraft(c, '设置 <专注> 模式', 1);
       await c.ev(`document.getElementById('btn-publish').click()`); await publishDone(c);
       const shell = JSON.parse(await decodeBlobs(c)).find(s => /<!DOCTYPE html>/.test(s)) || '';
-      chk(this.name, /<title>设置 &lt;专注&gt; 模式<\/title>/.test(shell) && /og:image" content="https?:\/\/[^"]+\/i\/[a-z0-9]+\.(webp|jpg)"/.test(shell), (shell.match(/<title>.*<\/title>|og:image[^>]+/g) || []).join(' '));
+      chk(this.name, /<title>设置 &lt;专注&gt; 模式<\/title>/.test(shell) && /og:image" content="https?:\/\/[^"]+\/i\/[a-z0-9]+\.(webp|jpg|png)"/.test(shell), (shell.match(/<title>.*<\/title>|og:image[^>]+/g) || []).join(' '));
     } finally { c.close(); }
   },
   async 'O-4 阅读页提前加载后两步的图'() {

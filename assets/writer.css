@@ -9,13 +9,17 @@ body{display:flex;flex-direction:column;min-height:100dvh}
   padding:calc(8px + env(safe-area-inset-top)) 12px 8px;
   background:var(--bg);border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:8px;
+  flex-wrap:wrap;row-gap:0;
 }
+/* 标题独占第二行、做成大标题（2026-10-10 用户从四套对比图里选的 B：原来挤在顶栏里一行 17px 小字，
+   填没填都不起眼，手机上还只剩 198px 宽）。跟着顶栏一起吸顶，往下滚也一直看得到 */
 .wtop input{
-  flex:1;min-width:0;height:var(--tap);
+  order:9;flex:0 0 100%;min-width:0;height:var(--tap);padding:0 6px;
   border:0;background:none;color:var(--ink);
-  font-size:17px;font-weight:600;font-family:inherit;
+  font-size:26px;font-weight:700;letter-spacing:.2px;font-family:inherit;
 }
-.wtop input::placeholder{color:var(--muted);font-weight:400}
+.wtop input::placeholder{color:var(--muted);font-weight:700;opacity:.6}
+#btn-home2{margin-right:auto}        /* 标题挪走以后，把「已保存」和设置键推到第一行右边 */
 .iconbtn{
   flex:0 0 auto;width:var(--tap);height:var(--tap);border-radius:12px;
   display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--ink2);
@@ -211,8 +215,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 }
 .pastebox{
   margin-top:10px;min-height:var(--tap);
-  border:1px dashed var(--line);border-radius:12px;
-  padding:12px;font-size:16px;color:var(--ink);
+  border:1.5px dashed var(--brand);border-radius:12px;   /* 一直显示以后它是个正经入口，边框用主色才看得出"这里能放东西" */
+  padding:12px;font-size:16px;color:var(--ink);line-height:1.5;
   text-align:center;background:var(--card);
   -webkit-user-select:text;user-select:text;   /* 不能选中就长按不出菜单 */
   overflow:hidden;

@@ -17,7 +17,14 @@
    ⑤ 回弹动画的过渡类 .zanim 会在松手后挂 260ms。这期间再按下去，每一下移动
       都要走 0.24s 缓动 → "慢慢跟上来"。现在按下时**从当前画面位置接住**并立即摘掉过渡。
    ⑥ 拖动松手就停死，没有惯性。现在按 UIKit 的正常减速率（0.998/ms）滑行。
-   ⑦ 电脑触控板捏合（ctrl+滚轮）增量很小，旧的 /420 灵敏度下捏半天才动一点。 */
+   ⑦ 电脑触控板捏合（ctrl+滚轮）增量很小，旧的 /420 灵敏度下捏半天才动一点。
+
+   2026-10-10「缩放过程中有点掉帧、卡卡的」量出来的两个原因（tools/verify-zoom-smooth.js 守着）：
+   ⑧ 鼠标滚轮一格就把倍率直接跳过去：滚 6 格，90 帧里只有 6 帧画面在变、每帧跳 17%——
+      看着像掉帧，其实是根本没有中间帧。现在滚轮只改"目标倍率"，画面每帧追过去（见 wheelTo）。
+   ⑨ 每个 pointermove 都写一次 transform 再读一次布局（getBoundingClientRect）：两根手指、
+      高回报率下一帧要写 4 次读 4 次，慢的手机上一帧的时间全花在这。现在一帧只写一次（schedule），
+      框和图的尺寸缓存起来（measure），手势中不再读布局。 */
 (() => {
   'use strict';
 
@@ -40,6 +47,8 @@
   const V_FLICK = 0.1;       // px/ms，松手速度超过它才滑行（慢慢拖着松手就停在原地）
   const S_UNDER = 0.45;      // 缩到 1× 以下的阻力尺度：再怎么捏也只能到 ~0.6×（自己调的值）
   const S_OVER = MAX * 0.5;  // 放到 8× 以上的阻力尺度
+  const WHEEL_TAU = 70;      // ms，滚轮缩放追目标的时间常数：约 0.2 秒走完 95%（自己调的值：再短看不出过程，再长觉得拖）
+  const WHEEL_STEP = 40;     // 滚轮增量小于它＝触控板/平滑滚轮，本来就是连续的，直接跟（再追一遍反而滞后）
 
   const rubber = (x, d) => (1 - 1 / (x * RB / d + 1)) * d;
   const unrubber = (y, d) => { y = Math.min(y, d * 0.999); return d / RB * (1 / (1 - y / d) - 1); };
@@ -65,19 +74,37 @@
     let lastMid = null;                 // 最后一次捏合的两指中点：松手回弹时以它为锚
     let samples = [];                   // 最近 100ms 的指针位置，算松手速度用
     let glide = 0;                      // 惯性动画的 rAF id
-    let pctEl = null;
+    let wheel = null;                   // 滚轮缩放正在追的目标 { target, x, y, raf, t }
+    let pending = 0;                    // 排着队等下一帧画的 rAF id
+    let geo = null;                     // 框和图的尺寸缓存（见 measure）
+    let zoomedCls = false, faded = false;
 
     /* ── 画面 ───────────────────────────────────── */
     const paint = () => {
+      if (pending) { cancelAnimationFrame(pending); pending = 0; }
       const k = dismiss ? Math.max(0.82, 1 - Math.abs(dy) / 1400) : 1;
       img.style.transform =
         `translate(${tx}px, ${ty + dy}px) scale(${(scale * k).toFixed(4)})`;
-      box.classList.toggle('zoomed', scale > 1.01);
-      if (!pctEl || !pctEl.isConnected) pctEl = dlg.querySelector('.zpct');
-      if (pctEl) pctEl.textContent = Math.round(scale * 100) + '%';
-      if (dismiss) dlg.style.setProperty('--zfade', String(Math.max(0, 1 - Math.abs(dy) / 320)));
-      else dlg.style.removeProperty('--zfade');
+      const z = scale > 1.01;
+      if (z !== zoomedCls) { zoomedCls = z; box.classList.toggle('zoomed', z); }
+      if (dismiss) { faded = true; dlg.style.setProperty('--zfade', String(Math.max(0, 1 - Math.abs(dy) / 320))); }
+      else if (faded) { faded = false; dlg.style.removeProperty('--zfade'); }
     };
+    /** 手势跟随用：一帧里来多少次 move 都只画一次（见文件头 ⑨）。要立刻生效的地方直接调 paint() */
+    const schedule = () => { if (!pending) pending = requestAnimationFrame(() => { pending = 0; paint(); }); };
+
+    /** 框和图的尺寸。手势中反复要用，而它们只在换图、图片加载完、窗口变化时才会变，所以量一次存着。
+        图还没加载出来（宽 0）时不存，下次再量 */
+    function measure() {
+      if (geo) return geo;
+      const r = box.getBoundingClientRect();
+      const g = { left: r.left, top: r.top, w: r.width, h: r.height, iw: img.clientWidth, ih: img.clientHeight };
+      if (g.w && g.iw) geo = g;
+      return g;
+    }
+    const remeasure = () => { geo = null; };
+    img.addEventListener('load', remeasure);
+    addEventListener('resize', remeasure);
 
     /** 平滑变化用（双击、还原、回弹）；手势进行中不要用，会拖慢跟手 */
     function animate(fn) {
@@ -93,9 +120,9 @@
 
     /** 某倍率下，位移允许的范围 ±mx / ±my（图比框小的那一边是 0） */
     function limits(s = scale) {
-      const r = box.getBoundingClientRect();
-      return { mx: Math.max(0, (img.clientWidth * s - r.width) / 2),
-               my: Math.max(0, (img.clientHeight * s - r.height) / 2), w: r.width, h: r.height };
+      const g = measure();
+      return { mx: Math.max(0, (g.iw * s - g.w) / 2),
+               my: Math.max(0, (g.ih * s - g.h) / 2), w: g.w, h: g.h };
     }
     function clamp() {
       const { mx, my } = limits();
@@ -107,8 +134,8 @@
         free=true 用于手势进行中：不夹倍率、不夹位移（夹了手指下那一点就会溜走，见文件头 ④） */
     function zoomAt(cx, cy, next, free) {
       if (!free) next = Math.min(MAX, Math.max(MIN, next));
-      const r = box.getBoundingClientRect();
-      const px = cx - r.left - r.width / 2, py = cy - r.top - r.height / 2;
+      const g = measure();
+      const px = cx - g.left - g.w / 2, py = cy - g.top - g.h / 2;
       const k = next / scale;
       tx = px - (px - tx) * k;
       ty = py - (py - ty) * k;
@@ -120,7 +147,40 @@
 
     /* ── 惯性滑行 ─────────────────────────────────
        松手时的速度按 0.998/ms 衰减（UIKit 正常减速率）。冲出边界就衰减得快得多，停下后弹回边界 */
-    function stopGlide() { if (glide) { cancelAnimationFrame(glide); glide = 0; } }
+    function stopWheel() { if (wheel) { cancelAnimationFrame(wheel.raf); wheel = null; } }
+    /** 停掉所有自己在跑的动画（惯性滑行、滚轮追目标）。停在哪算哪：状态变量就是画面上的样子 */
+    function stopGlide() {
+      if (glide) { cancelAnimationFrame(glide); glide = 0; }
+      stopWheel();
+    }
+
+    /* ── 滚轮缩放：只改目标，画面每帧追过去（见文件头 ⑧） ─────────
+       按倍率的对数追，放大和缩小的快慢才一样；光标底下那一点全程不动 */
+    function wheelTo(cx, cy, factor) {
+      const base = wheel ? wheel.target : scale;
+      const target = Math.min(MAX, Math.max(MIN, base * factor));
+      if (wheel) { wheel.target = target; wheel.x = cx; wheel.y = cy; return; }
+      wheel = { target, x: cx, y: cy, t: performance.now(), raf: 0 };
+      const step = now => {
+        const w = wheel;
+        if (!w) return;
+        const dt = Math.min(34, Math.max(0, now - w.t)); w.t = now;
+        const gap = Math.log(w.target / scale);
+        const done = Math.abs(gap) < 0.002;
+        zoomAt(w.x, w.y, done ? w.target : scale * Math.exp(gap * (1 - Math.exp(-dt / WHEEL_TAU))));
+        paint();
+        if (done) { wheel = null; wheelEnd(); return; }
+        w.raf = requestAnimationFrame(step);
+      };
+      wheel.raf = requestAnimationFrame(step);
+    }
+    /** 滚轮停下来 160ms 后摘掉 will-change，画面按新倍率重新栅格化（清晰） */
+    function wheelEnd() {
+      clearTimeout(box._wheelEnd);
+      box._wheelEnd = setTimeout(() => { if (!wheel && !pts.size && !glide) gpu(false); }, 160);
+    }
+    const calm = matchMedia('(prefers-reduced-motion: reduce)');
+
     function startGlide(vx, vy) {
       stopGlide();
       const sp = Math.hypot(vx, vy);
@@ -153,8 +213,9 @@
     /** 从"现在屏幕上看到的样子"接住：回弹/双击过渡进行到一半被按住时，
         状态变量里存的已经是终点，画面还在半路。不接住就会"啪"地跳到终点，
         而且那层过渡还挂着，接下来每一下移动都带 0.24s 缓动（见文件头 ⑤） */
-    function catchNow() {
-      stopGlide();
+    function catchNow(keepWheel) {
+      if (keepWheel) { if (glide) { cancelAnimationFrame(glide); glide = 0; } }   // 滚轮连着滚：上一格还没追完的目标要留着
+      else stopGlide();
       clearTimeout(animate._t);
       if (!img.classList.contains('zanim')) return;
       const m = /matrix\(([^)]+)\)/.exec(getComputedStyle(img).transform || '');
@@ -168,8 +229,8 @@
 
     /** 松手后把越界的倍率/位移弹回合法范围（带过渡）。anchor = 倍率回弹时保持不动的那一点 */
     function settle(anchor) {
-      const r = box.getBoundingClientRect();
-      const a = anchor || { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      const g = measure();
+      const a = anchor || { x: g.left + g.w / 2, y: g.top + g.h / 2 };
       const s0 = scale, x0 = tx, y0 = ty;
       if (scale < MIN || scale > MAX) zoomAt(a.x, a.y, scale);   // 不带 free：夹回 MIN~MAX
       if (scale <= 1.001) { scale = 1; tx = ty = 0; }
@@ -206,16 +267,23 @@
     /* ── 电脑：滚轮 / 双击 / 鼠标移动唤回工具栏 ──── */
     box.addEventListener('wheel', e => {
       e.preventDefault();
-      catchNow();
+      catchNow(true);
       gpu(true);
       /* 鼠标滚轮一格 deltaY≈100 → /420 约 27%/格；
          触控板捏合（浏览器报成 ctrl+滚轮）每个事件只有几个单位，/420 要捏很久才动，改 /100。
          Firefox 可能按"行"报（deltaMode=1），换算成像素 */
       const dw = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
-      zoomAt(e.clientX, e.clientY, scale * Math.exp(-dw / (e.ctrlKey ? 100 : 420)));
-      paint();
+      const factor = Math.exp(-dw / (e.ctrlKey ? 100 : 420));
       clearTimeout(box._wheelEnd);
-      box._wheelEnd = setTimeout(() => gpu(false), 160);   // 停下来就摘掉，画面回到清晰
+      if (e.ctrlKey || Math.abs(dw) < WHEEL_STEP || calm.matches) {
+        // 触控板捏合 / 平滑滚轮：增量本来就细，直接跟；「减弱动态效果」开着时也不追
+        stopWheel();
+        zoomAt(e.clientX, e.clientY, scale * factor);
+        schedule();
+        wheelEnd();
+      } else {
+        wheelTo(e.clientX, e.clientY, factor);    // 鼠标滚轮一格一格的：画面追过去，追到了再摘 will-change
+      }
       showChrome();
     }, { passive: false });
 
@@ -240,7 +308,7 @@
       // 合成出来的指针事件（自检脚本、某些辅助工具）没有"活动指针"，这里会抛，兜住
       try { box.setPointerCapture(e.pointerId); } catch (err) { /* 不影响后面的逻辑 */ }
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pts.size === 1) { catchNow(); wasPinch = false; lastMid = null; }   // 回弹/滑行中也能一把接住
+      if (pts.size === 1) { catchNow(); remeasure(); wasPinch = false; lastMid = null; }   // 回弹/滑行中也能一把接住；尺寸每轮手势重量一次
       gpu(true);
 
       if (pts.size === 1) {
@@ -279,7 +347,7 @@
         ty += m.y - pinch.mid.y;
         pinch = { dist: d, mid: m };
         lastMid = m;
-        paint();                                 // 手势中不夹（见文件头 ④），松手再 settle
+        schedule();                              // 手势中不夹（见文件头 ④），松手再 settle
         return;
       }
 
@@ -290,7 +358,7 @@
         dismiss.lastY = e.clientY; dismiss.lastT = now;
         dy = e.clientY - dismiss.y0;
         if (dy < 0) dy = dy * 0.3;               // 往上拉给阻尼，不让它飞走
-        paint();
+        schedule();
         return;
       }
 
@@ -304,7 +372,7 @@
         const now = performance.now();
         samples.push({ x: e.clientX, y: e.clientY, t: now });
         while (samples.length > 2 && now - samples[0].t > 100) samples.shift();
-        paint();
+        schedule();
       }
     });
 
@@ -313,6 +381,7 @@
       const had = pts.delete(e.pointerId);
       if (pts.size < 2) pinch = null;
       if (!had) return;
+      if (pending) paint();                // 最后一下移动还排着队：松手时立刻画掉，不拖到下一帧
 
       // 双指变单指的瞬间：剩下那根手指的"上一次位置"还停留在它按下时的坐标，
       // 下一次 move 会拿几百像素的差值去平移 —— 这就是"松手时图片跳一下"。
@@ -401,6 +470,7 @@
     return {
       open(src, alt) {
         stopGlide();
+        remeasure();
         img.src = src;
         img.alt = alt || '';
         // 顶部标题：「第 3 步的截图」→「第 3 步」（照片在这个位置显示拍摄时间）

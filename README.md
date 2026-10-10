@@ -130,11 +130,11 @@ node tools/verify-delete.js --real        # 删除已发布的教程（真发一
 ```
 assets/reader.js    阅读器（全站唯一一份，改它所有历史教程一起生效）
 assets/writer.js    写作页
-assets/img.js       图片压缩（宽度>1440 才缩，另有 600 万像素兜底，绝不放大）
+assets/img.js       图片处理（截图无损优先；宽度>2560 才缩，另有 600 万像素兜底，绝不放大）
 assets/github.js    Git Data API 原子发布
 assets/store.js     草稿（IndexedDB，每份各占一个位置，图片单独存）
 assets/ui.js        站内的提示框/确认框（代替浏览器原生弹框）
 assets/primary.js   github.io 上的写作页/教程库转到 jc.wbztl.xyz
-t/<id>/             一份教程：index.html 壳子 + data.json + i/*.webp
+t/<id>/             一份教程：index.html 壳子 + data.json + i/*（.webp / .png / .jpg）
 list.json           教程索引
 ```

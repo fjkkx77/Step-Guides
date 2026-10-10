@@ -48,13 +48,20 @@
     return (r.w === 1170 && r.h === 2532 && r.scaled === false) || JSON.stringify(r);
   });
 
-  await t('pickSize：过宽的图按宽度缩到 1440', () => {
-    const r = pickSize(3000, 1000);
-    return (r.w === 1440 && r.h === 480) || JSON.stringify(r);
+  // 上限从 SGImg.MAX_W 读，不在这里再写一遍数字（2026-10-10 从 1440 调到 2560 时这条跟着红过）
+  const MW = window.SGImg.MAX_W;
+  await t('pickSize：过宽的图按宽度缩到上限（比例不变）', () => {
+    const r = pickSize(MW * 2, 1000);
+    return (r.w === MW && r.h === 500) || JSON.stringify(r);
+  });
+
+  await t('pickSize：电脑整屏截图 2560×1440 不缩（旧上限 1440 会把它砍到 58%）', () => {
+    const r = pickSize(2560, 1440);
+    return (r.w === 2560 && r.scaled === false) || JSON.stringify(r);
   });
 
   await t('pickSize：正好等于宽度上限不缩', () =>
-    pickSize(1440, 800).scaled === false || '边界被多缩了一次');
+    pickSize(MW, 800).scaled === false || '边界被多缩了一次');
 
   await t('pickSize：超长整页图受总像素兜底', () => {
     const r = pickSize(1200, 12000);        // 1440 万像素，超过 600 万
@@ -93,9 +100,9 @@
     return kb <= 200 || (kb.toFixed(1) + 'KB 超标');
   });
 
-  await t('compress：产出类型是 webp 或 jpg', async () => {
+  await t('compress：产出类型是 webp / png / jpg 之一', async () => {
     const r = await compress(sample);
-    return ['webp', 'jpg'].includes(r.ext) || r.ext;
+    return ['webp', 'png', 'jpg'].includes(r.ext) || r.ext;
   });
 
   await t('toBase64：可还原出同样长度', async () => {
