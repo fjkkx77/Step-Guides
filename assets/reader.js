@@ -554,23 +554,44 @@
         ? `已经做完 ${resume} 步，还剩 ${steps.length - resume} 步`
         : `共 ${steps.length} 步 · 一屏只做一件事，做好了再点下一步`));
       const ol = el('ol', 'pv-road');
-      const row = (cls, n, t) => {
-        const li = el('li', cls);
-        li.append(el('span', 'pv-n', n), el('span', 'pv-t', t));
-        ol.appendChild(li);
+      const li = (cls, n, t) => {
+        const x = el('li', cls);
+        x.append(el('span', 'pv-n', n), el('span', 'pv-t', t));
+        return x;
       };
-      // 只露 5 步：以「接下来这步」为准往前留 2 步，更早做完的折成一行；后面的只说还有几步
+      const stepLi = i => li(i < resume ? 'past' : (i === resume ? 'now' : ''), i < resume ? '✓' : String(i + 1), steps[i].title || `第 ${i + 1} 步`);
+      /* 折起来的那一行（「前 N 步已完成」/「还有 N 步」）点一下原地展开成完整步骤（用户 2026-10-16 要求）。
+         右边一个下箭头提示能点；整行都是热区 */
+      const fold = (cls, n, t, from, to) => {
+        const x = li(cls + ' fold', n, t);
+        x.appendChild(el('i', 'pv-chev'));
+        x.setAttribute('role', 'button');
+        x.tabIndex = 0;
+        x.setAttribute('aria-label', t + '，点开查看');
+        const open = () => {
+          const rows = [];
+          for (let i = from; i < to; i++) rows.push(stepLi(i));
+          x.replaceWith(...rows);
+        };
+        x.addEventListener('click', open);
+        x.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        ol.appendChild(x);
+      };
+      // 只露 5 步：以「接下来这步」为准往前留 2 步，更早做完的折成一行；后面的也折成一行
       const start = Math.max(0, Math.min(resume - 2, steps.length - 5));
-      if (start > 0) row('past rest', '✓', `前 ${start} 步已完成`);
-      steps.slice(start, start + 5).forEach((s, k) => {
-        const i = start + k;
-        row(i < resume ? 'past' : (i === resume ? 'now' : ''), i < resume ? '✓' : String(i + 1), s.title || `第 ${i + 1} 步`);
-      });
-      if (start + 5 < steps.length) row('rest', '…', `还有 ${steps.length - start - 5} 步`);
+      if (start > 0) fold('past rest', '✓', `前 ${start} 步已完成`, 0, start);
+      for (let i = start; i < Math.min(start + 5, steps.length); i++) ol.appendChild(stepLi(i));
+      if (start + 5 < steps.length) fold('rest', '…', `还有 ${steps.length - start - 5} 步`, start + 5, steps.length);
       box.appendChild(ol);
       const act = el('div', 'pv-act');
-      act.appendChild(pvBtn('pv-go', resume ? `继续第 ${resume + 1} 步 ›` : '开始第 1 步 ›', () => { closeSheet(o); goto(resume, false); }));
-      if (resume) act.appendChild(pvBtn('pv-sub', '从头开始', () => { closeSheet(o); goto(0, false); }));
+      /* 有阅读记录时主按钮是「从头开始」、「继续第 N 步」退到下面（用户 2026-10-16 要求调换） */
+      if (resume) {
+        act.append(
+          pvBtn('pv-go', '从头开始', () => { closeSheet(o); goto(0, false); }),
+          pvBtn('pv-sub', `继续第 ${resume + 1} 步 ›`, () => { closeSheet(o); goto(resume, false); }));
+      } else {
+        act.appendChild(pvBtn('pv-go', '开始第 1 步 ›', () => { closeSheet(o); goto(0, false); }));
+      }
       o.append(box, act);
     });
   }
@@ -763,18 +784,11 @@
 
     $('#modebtn').addEventListener('click', () => setMode(mode() === 'step' ? 'long' : 'step'));
     $('#prev').addEventListener('click', () => goto(cur - 1));
-    let ticking = false;
+    /* 点了直接翻页。2026-10-16 上线过「先在『第 N 步』旁打勾 260ms 再翻」，
+       用户真机上觉得多此一举、慢半拍，当天撤掉——别再加回翻页前的停顿 */
     $('#next').addEventListener('click', () => {
-      if (ticking) return;
       if (cur >= steps.length - 1) { showFinish(); return; }
-      const p = document.querySelector(`.page[data-i="${cur}"]`);
-      if (!p || reduceMotion()) { goto(cur + 1); return; }
-      // 先在「第 N 步」旁打个勾（260ms）再翻过去：按下去的这一下要有"完成了"的回应
-      // 目标在按下时就定死：打勾这 260ms 里手指要是又滑了一下，不能在滑到的那步上再 +1
-      const to = cur + 1;
-      ticking = true;
-      p.classList.add('ticked');
-      setTimeout(() => { p.classList.remove('ticked'); ticking = false; goto(to); }, 260);
+      goto(cur + 1);
     });
     applyDim(loadDim());
     addEventListener('resize', fitTop);

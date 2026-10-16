@@ -1,6 +1,7 @@
 /* 2026-10-16 阅读页「沉浸感」改版的回归测试：
-   ① 逐步模式：文字在截图上面；「第 N 步」小标签 + 大标题（不再显示圆圈序号）；主按钮「做好了，下一步」先打勾再翻页
-   ② 封面：第一次打开出「开始第 1 步」；有阅读记录时出「继续第 N 步」+「从头开始」；矮屏上按钮在屏内
+   ① 逐步模式：文字在截图上面；「第 N 步」小标签 + 大标题（不再显示圆圈序号）；主按钮「做好了，下一步」点了立刻翻页（不停顿）
+   ② 封面：第一次打开出「开始第 1 步」；有阅读记录时主按钮「从头开始」、下面「继续第 N 步」；
+      折起来的「还有 N 步 / 前 N 步已完成」能点开；矮屏上按钮在屏内
    ③ 最后一步 → 完成页
    ④ 长文模式：每步标题在截图上面、吸顶挂在顶栏下面；看过的步骤标 past；步与步之间的空白明显大于步内间距
    ⑤ 「目录」里的「长文只亮当前步」开关：默认关、打开后非当前步变淡、刷新后还记得
@@ -40,6 +41,16 @@ async function phone(w, h) {
     chk(`${L} 一打开先出封面，「开始第 1 步」在屏内、≥44 高`, cov.open && /开始第 1 步/.test(cov.t) && cov.inView && cov.h >= 44, JSON.stringify(cov));
     chk(`${L} 封面路线图只露 5 步 +「还有 N 步」`, cov.rows === 6, `${cov.rows} 行`);
     chk(`${L} 封面无横向溢出`, cov.sw <= w, `${cov.sw}/${w}`);
+    // 「还有 N 步」点开 → 原地展开成完整 12 步（2026-10-16 用户要求）
+    const fd = await J(c, `(() => { const f = document.querySelector('.pv.cover .pv-road li.fold');
+      if (!f) return { has: false };
+      const r = f.getBoundingClientRect(); f.click();
+      const lis = [...document.querySelectorAll('.pv.cover .pv-road li')];
+      return { has: true, h: r.height, n: lis.length, folds: lis.filter(x => x.classList.contains('fold')).length,
+        last: lis[lis.length - 1].textContent }; })()`);
+    chk(`${L} 封面「还有 N 步」能点（≥44 高），点开后列出全部 12 步`, fd.has && fd.h >= 44 && fd.n === 12 && fd.folds === 0 && /^12/.test(fd.last), JSON.stringify(fd));
+    const goIn = await c.ev(`(() => { const r = document.querySelector('.pv.cover .pv-go').getBoundingClientRect(); return r.bottom <= innerHeight + 1 && r.top >= 0; })()`);
+    chk(`${L} 展开后「开始」按钮仍在屏内`, goIn);
     await startCover(c);
     chk(`${L} 点「开始」封面收起`, !(await c.ev(`!!document.querySelector('.pv.cover')`)));
 
@@ -62,15 +73,13 @@ async function phone(w, h) {
     const want = h >= 700 ? 0.55 : 0.46;
     chk(`${L} 截图不被挤得太窄（≥ 屏宽 ${Math.round(want * 100)}%）`, g.imgW >= w * want, `${Math.round(g.imgW)}px`);
 
-    // 点「做好了」：先打勾、再翻页
-    await c.ev(`document.getElementById('next').click()`); await sleep(80);
-    const mid = await J(c, `({ ticked: !!document.querySelector('.page[data-i="0"].ticked'), count: document.getElementById('count').textContent.trim() })`);
-    chk(`${L} 点「做好了」先在当前步打勾（还没翻页）`, mid.ticked && mid.count.startsWith('1 /'), JSON.stringify(mid));
+    // 点「做好了」立刻翻页，中间不停顿（2026-10-16 上线过「先打勾 260ms 再翻」，用户嫌慢半拍，撤了）
+    const now = await c.ev(`(() => { document.getElementById('next').click(); return document.getElementById('count').textContent.trim(); })()`);
+    chk(`${L} 点「做好了」当下就到第 2 步（不先打勾再翻）`, now.startsWith('2 /') && !(await c.ev(`!!document.querySelector('.ticked')`)), now);
     await sleep(900);
-    chk(`${L} 打勾后翻到第 2 步`, (await c.ev(`document.getElementById('count').textContent.trim()`)).startsWith('2 /'));
-    // 连点不会跳两步
+    // 连点三下就前进三步（不吞点击）
     await c.ev(`document.getElementById('next').click();document.getElementById('next').click();document.getElementById('next').click()`); await sleep(1000);
-    chk(`${L} 连点三下只前进一步`, (await c.ev(`document.getElementById('count').textContent.trim()`)).startsWith('3 /'));
+    chk(`${L} 连点三下前进三步`, (await c.ev(`document.getElementById('count').textContent.trim()`)).startsWith('5 /'));
 
     // ── ③ 最后一步 → 完成页
     const n = +(await c.ev(`document.querySelectorAll('.page').length`));
@@ -86,10 +95,19 @@ async function phone(w, h) {
     await fresh(c, 'step', 6);
     const rc = await J(c, `(() => { const o = document.querySelector('.pv.cover');
       if (!o) return { go: '没有封面' };
-      return { go: o.querySelector('.pv-go').textContent, sub: !!o.querySelector('.pv-sub'), meta: o.querySelector('.pv-meta').textContent,
+      return { go: o.querySelector('.pv-go').textContent, sub: (o.querySelector('.pv-sub') || {}).textContent, meta: o.querySelector('.pv-meta').textContent,
         now: (o.querySelector('.pv-road li.now .pv-t') || {}).textContent }; })()`);
-    chk(`${L} 有阅读记录时封面是「继续第 7 步」+「从头开始」`, /继续第 7 步/.test(rc.go) && rc.sub && /做完 6 步/.test(rc.meta), JSON.stringify(rc));
+    // 2026-10-16 用户要求：有阅读记录时主按钮（实心）是「从头开始」，「继续第 N 步」在下面
+    chk(`${L} 有阅读记录时：主按钮「从头开始」、下面是「继续第 7 步」`, rc.go === '从头开始' && /继续第 7 步/.test(rc.sub || '') && /做完 6 步/.test(rc.meta), JSON.stringify(rc));
+    // 「前 N 步已完成」也能点开
+    const fd2 = await J(c, `(() => { const f = document.querySelector('.pv.cover .pv-road li.fold.past'); if (!f) return { has: false };
+      f.click(); const lis = [...document.querySelectorAll('.pv.cover .pv-road li')];
+      return { has: true, first: lis[0].textContent, past: lis.filter(x => x.classList.contains('past')).length }; })()`);
+    chk(`${L} 「前 N 步已完成」点开后从第 1 步列起、前 6 步都打勾`, fd2.has && /打开设置/.test(fd2.first) && fd2.past === 6, JSON.stringify(fd2));
     await c.ev(`document.querySelector('.pv.cover .pv-sub')?.click()`); await sleep(700);
+    chk(`${L} 点「继续第 7 步」到第 7 步`, (await c.ev(`document.getElementById('count').textContent.trim()`)).startsWith('7 /'));
+    await fresh(c, 'step', 6);
+    await c.ev(`document.querySelector('.pv.cover .pv-go')?.click()`); await sleep(700);
     chk(`${L} 点「从头开始」回到第 1 步`, (await c.ev(`document.getElementById('count').textContent.trim()`)).startsWith('1 /'));
 
     // ── ④ 长文模式

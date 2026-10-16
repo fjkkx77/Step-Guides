@@ -167,11 +167,6 @@ html[data-mode="step"] .badge{display:none}     /* 序号由「第 N 步」说�
   background:var(--brand-fill);color:#fff;font-size:14px;font-weight:600;line-height:1;
 }
 .say h2{margin:0;font-size:28px;font-weight:700;line-height:34px;overflow-wrap:anywhere}
-/* 点「做好了」：「第 N 步」后面先冒出「✓ 完成」，再翻页 */
-.kicker::after{content:"";display:inline-block;width:0;opacity:0;color:#1E7A34;transition:opacity .15s}   /* 页面浅灰底上 #248A3D 只有约 3.9:1，深一档到约 4.8:1 */
-.page.ticked .kicker::after{content:" ✓ 完成";width:auto;opacity:1}
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .kicker::after{color:#30D158} }
-:root[data-theme="dark"] .kicker::after{color:#30D158}
 /* 网址、密码、序列号这类不断行的长串要能断开，否则整页左右晃（审查 P2-10） */
 .say p{margin:0;font-size:16px;line-height:1.72;color:var(--ink2);white-space:pre-wrap;overflow-wrap:anywhere}
 
@@ -598,6 +593,13 @@ html:not([data-fx="b"]) .segs{display:none}
 .pv-road li.now .pv-n,.pv-road li.past .pv-n{background:var(--brand-fill);border-color:var(--brand-fill);color:#fff}
 .pv-road li.past .pv-t,.pv-road li.rest{color:var(--muted)}
 .pv-road li.rest:not(.past) .pv-n{border-style:dashed}
+/* 折起来的行能点开：整行是热区，右边一个下箭头 */
+.pv-road li.fold{cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent}
+.pv-road li.fold:active{background:rgba(120,120,130,.12)}
+.pv-road li.fold:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.pv-chev{flex:0 0 auto;width:8px;height:8px;margin:0 4px 4px auto;
+  border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);opacity:.7}
+@media (hover:hover){ .pv-road li.fold:hover{background:rgba(120,120,130,.08)} }
 /* 按钮贴底：矮屏（320×568）上路线图放不下时，滚的是路线图，「开始」一直看得见、够得着 */
 .pv-act{position:sticky;bottom:0;width:100%;max-width:520px;margin:16px auto 0;padding-top:8px;background:var(--bg);
   display:flex;flex-direction:column;gap:8px}
