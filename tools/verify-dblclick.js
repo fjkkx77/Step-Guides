@@ -67,9 +67,14 @@ const J = async (c, expr) => JSON.parse(await c.ev(`JSON.stringify(${expr})`));
     chk('⑥ 慢双击空白处（间隔 400ms），查看器不关', s.open, JSON.stringify(s));
 
     // 三连击空白处：第三下不能被当成新的单击去关（第二轮审查）
+    // 点在屏幕最左边：双击放大后图片会长大，点得离图太近，第三下其实落在图上，测不到要测的东西（第一版就这样，旧代码也全过）。
+    // 所以第三下之前先确认这个点仍是空白，场景不成立就直接判失败
     p = await openViewer();
-    { const bx = Math.max(20, p.l - 150);
-      await click(bx, p.y, 1); await sleep(60); await click(bx, p.y, 2); await sleep(60); await click(bx, p.y, 3); await sleep(900); }
+    { const bx = 8;
+      await click(bx, p.y, 1); await sleep(60); await click(bx, p.y, 2); await sleep(120);
+      const blank = await c.ev(`document.elementFromPoint(${bx}, ${p.y}) !== document.querySelector('dialog#zoom img')`);
+      chk('⑦ 场景成立：双击放大后，第三下的位置仍是空白', blank);
+      await click(bx, p.y, 3); await sleep(900); }
     s = await state();
     chk('⑦ 三连击空白处，查看器不关', s.open, JSON.stringify(s));
 
