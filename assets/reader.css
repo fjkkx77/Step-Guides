@@ -575,15 +575,26 @@ html:not([data-fx="b"]) .segs{display:none}
 .pv{
   position:fixed;inset:0;z-index:80;background:var(--bg);color:var(--ink);
   display:flex;flex-direction:column;overflow:auto;overscroll-behavior:contain;
-  padding:calc(28px + env(safe-area-inset-top)) 24px calc(16px + env(safe-area-inset-bottom));
+  /* 底部留白放在 .pv-act 里（不放这里）：整页兜底滚动时，sticky 的按钮区一直盖到屏幕底边，
+     步骤不会从按钮下面那条留白里露出来 */
+  padding:calc(28px + env(safe-area-inset-top)) 24px 0;
+  scroll-padding-bottom:calc(150px + env(safe-area-inset-bottom));  /* 兜底整页滚时让开 sticky 按钮区：8+52+8+48+16=132 再留点余量 */
   opacity:0;transform:translateY(12px);
   transition:opacity .28s ease, transform .28s cubic-bezier(.22,1,.36,1);
 }
 .pv.on{opacity:1;transform:none}
-.pv-box{flex:1;width:100%;max-width:520px;margin:0 auto}
+/* 版面分三段：标题（不动）/ 步骤列表（放不下时只滚它自己）/ 按钮（不动）。
+   以前是整页一起滚、按钮 sticky 贴底：「还有 N 步」全展开后，步骤从按钮后面、按钮下面露出来，
+   看着像叠在一起（2026-10-16 用户截图）。现在列表是自己的滚动容器，内容永远在卡片圆角里面 */
+.pv-box{flex:1 1 auto;min-height:0;width:100%;max-width:520px;margin:0 auto;display:flex;flex-direction:column}
+.pv-box > *{flex:none}
 .pv-kicker{font-size:15px;font-weight:600;color:var(--brand);margin-top:8vh}
 .pv-title{font-size:30px;line-height:1.25;font-weight:800;margin:6px 0 10px;overflow-wrap:anywhere}
 .pv-meta{font-size:16px;color:var(--muted);margin:0 0 22px}
+/* 列表只在放不下时缩（flex-shrink），最少留约 3 行高（横屏这类特别矮的屏放宽到 0.3 屏高）；
+   再放不下才退回整页滚（.pv 的 overflow:auto 兜底，按钮区 sticky 贴底） */
+.pv-box > .pv-road{flex:0 1 auto;min-height:min(150px, 30vh);overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;position:relative}
 .pv-road{list-style:none;margin:0;padding:6px 0;background:var(--card);border-radius:var(--radius)}
 .pv-road li{display:flex;align-items:center;gap:12px;padding:10px 14px;font-size:16px;line-height:1.4}
 .pv-road li + li{border-top:1px solid var(--line)}
@@ -593,15 +604,19 @@ html:not([data-fx="b"]) .segs{display:none}
 .pv-road li.now .pv-n,.pv-road li.past .pv-n{background:var(--brand-fill);border-color:var(--brand-fill);color:#fff}
 .pv-road li.past .pv-t,.pv-road li.rest{color:var(--muted)}
 .pv-road li.rest:not(.past) .pv-n{border-style:dashed}
-/* 折起来的行能点开：整行是热区，右边一个下箭头 */
-.pv-road li.fold{cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent}
-.pv-road li.fold:active{background:rgba(120,120,130,.12)}
-.pv-road li.fold:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+/* 能点的行（折叠行＝原地展开、步骤行＝跳到那一步）：整行是热区，右边一个箭头 */
+.pv-road li.fold,.pv-road li.go{cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent}
+.pv-road li.fold:active,.pv-road li.go:active{background:rgba(120,120,130,.12)}
+.pv-road li.fold:focus-visible,.pv-road li.go:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
 .pv-chev{flex:0 0 auto;width:8px;height:8px;margin:0 4px 4px auto;
   border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);opacity:.7}
-@media (hover:hover){ .pv-road li.fold:hover{background:rgba(120,120,130,.08)} }
-/* 按钮贴底：矮屏（320×568）上路线图放不下时，滚的是路线图，「开始」一直看得见、够得着 */
-.pv-act{position:sticky;bottom:0;width:100%;max-width:520px;margin:16px auto 0;padding-top:8px;background:var(--bg);
+/* 步骤行的箭头朝右（进去）、淡一些，跟折叠行朝下的（展开）区分 */
+.pv-road li.go .pv-chev{margin:0 6px 0 auto;transform:rotate(-45deg);opacity:.35}
+@media (hover:hover){ .pv-road li.fold:hover,.pv-road li.go:hover{background:rgba(120,120,130,.08)} }
+/* 按钮在底部：平时列表放不下时滚的是列表；特别矮的屏（横屏）整页兜底滚动时靠 sticky 贴底。
+   「开始」一直看得见、够得着 */
+.pv-act{flex:none;position:sticky;bottom:0;width:100%;max-width:520px;margin:16px auto 0;
+  padding:8px 0 calc(16px + env(safe-area-inset-bottom));background:var(--bg);
   display:flex;flex-direction:column;gap:8px}
 .pv-go{height:52px;border-radius:14px;background:var(--brand-fill);color:#fff;font-size:17px;font-weight:600}
 .pv-sub{height:48px;border-radius:14px;color:var(--brand);font-size:16px}
@@ -611,6 +626,12 @@ html:not([data-fx="b"]) .segs{display:none}
   animation:pvPop .5s cubic-bezier(.2,1.4,.4,1)}
 @keyframes pvPop{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
 @media (max-height:700px){ .pv-kicker{margin-top:2vh} .pv-title{font-size:26px} .pv-check{margin-top:6vh} }
+/* 横屏这类特别矮又够宽的屏：两个按钮上下叠要占 132px，320 高的屏里列表露不出一整行；改成并排（约 76px） */
+@media (max-height:440px) and (min-width:480px){
+  .pv-act{flex-direction:row-reverse;margin-top:10px}
+  .pv-act > *{flex:1 1 0;min-width:0}
+  .pv{scroll-padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+}
 @media (prefers-reduced-motion: reduce){ .pv,.pv-check{transition:none;animation:none} }
 
 /* 「目录」面板里的开关（iOS 开关样式）。标题和关闭键之间 */

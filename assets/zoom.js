@@ -32,7 +32,9 @@
   const TAP_MOVE = 8;        // 手指移动超过这个距离就不算"点"
   const TAP_MS = 500;        // 按下到抬起多久之内算"点"。260 太严：手指按一下停顿再抬
                              // 就判不成点了（自动化里两次往返也会超）。500 仍远低于长按
-  const DBL_MS = 300;        // 两次点击间隔在这之内算双击
+  const DBL_MS = 300;        // 两次点击间隔在这之内算双击（手指）
+  const DBL_MOUSE = 500;     // 鼠标：Windows 默认双击时间 500ms（微软 SetDoubleClickTime 文档原文）。
+                             // 浏览器的 dblclick 按系统设置判定，我们等得比它短，慢一点的双击第一下就会先被当成单击关掉
   const DISMISS_AT = 110;    // 下滑多少距离就关闭
   const FLING = 0.55;        // 甩动速度阈值 px/ms（参考自己的手势配方，慢拉不关、快甩就关）
 
@@ -78,6 +80,7 @@
     let pending = 0;                    // 排着队等下一帧画的 rAF id
     let geo = null;                     // 框和图的尺寸缓存（见 measure）
     let zoomedCls = false, faded = false;
+    let touchDblAt = 0;                 // 上一次手指双击缩放的时刻（挡浏览器补发的 dblclick）
 
     /* ── 画面 ───────────────────────────────────── */
     const paint = () => {
@@ -289,6 +292,10 @@
 
     box.addEventListener('dblclick', e => {
       e.preventDefault();
+      clearTimeout(box._tapT);           // 浏览器认定是双击了：第一下排着的「点空白关闭」作废
+      // 手指双击已经在指针事件里缩放过；若浏览器还补发一个 dblclick，再切一次就缩回去了。
+      // 只认「刚刚手指双击过」，不用 ghost()（那个窗口太宽，触摸后紧跟的真双击也会被吞）
+      if (Date.now() - touchDblAt < 700) return;
       catchNow();
       gpu(false);
       animate(() => zoomAt(e.clientX, e.clientY, scale > 1.01 ? 1 : DBL));
@@ -427,11 +434,19 @@
           const now2 = Date.now();
           // 先把要用的值取出来：下面 setTimeout 触发时 down 已经被置空，
           // 在回调里读 down.type 会抛 TypeError，工具栏就永远切不了（踩过）
-          const kind = down.type, px = e.clientX, py = e.clientY, tgt = e.target;
-          if (kind !== 'mouse' && now2 - lastTap < DBL_MS) {
-            lastTap = 0;
+          /* 点在不在图上，要按坐标重新命中：pointerdown 里 setPointerCapture 过，
+             pointerup 的 e.target 永远是 .box —— 以前拿它判断，电脑上每一下单击（含双击的两下）
+             都被当成「点空白」，300ms 后把查看器关掉（2026-10-16 用户报「双击放大/缩小会闪退」） */
+          const kind = down.type, px = e.clientX, py = e.clientY;
+          const tgt = document.elementFromPoint(px, py);
+          const win = kind === 'mouse' ? DBL_MOUSE : DBL_MS;
+          if (now2 - lastTap < win) {
+            // 双击的第二下：撤掉第一下排着的单击动作，自己也不再排。
+            // 手机在这里缩放；鼠标的缩放交给浏览器的 dblclick 事件（上面），这里不重复做
+            // 鼠标：三连击的第三下也算「接着双击」，不当成新的单击去排关闭（第二轮审查）
+            lastTap = kind === 'mouse' ? now2 : 0;
             clearTimeout(box._tapT);
-            animate(() => zoomAt(px, py, scale > 1.01 ? 1 : DBL));
+            if (kind !== 'mouse') { touchDblAt = Date.now(); animate(() => zoomAt(px, py, scale > 1.01 ? 1 : DBL)); }
           } else {
             lastTap = now2;
             clearTimeout(box._tapT);
@@ -442,7 +457,7 @@
               } else {
                 toggleChrome();                      // 手机：点一下收起/唤回工具栏
               }
-            }, DBL_MS);
+            }, win);
           }
         }
         down = null; last = null;

@@ -516,6 +516,7 @@
     o.setAttribute('role', 'dialog');
     o.setAttribute('aria-modal', 'true');
     build(o);
+    guardSheetScroll(o);
     document.body.appendChild(o);
     sheetOpen = o;
     requestAnimationFrame(() => {
@@ -525,6 +526,50 @@
     });
     return o;
   }
+  /* 封面/完成页开着时，手指在它上面滑不许带动下面的页面（长文模式下页面本身能滚）。
+     只放行手指底下、在封面里、这个方向还能滚的容器（现在就是步骤列表）；每一下 move 都重判——
+     滚到头那一下浏览器会把滚动交给整页。用 elementFromPoint 而不是 e.target：触摸的 target
+     固定是按下时那个元素。只有手指刚按下的前 4px 不判（免得轻点被吞）；
+     判过一次以后，小于 4px 的移动沿用上一次的结论——不能放过去：慢慢拖时恰好越过浏览器滚动阈值的
+     那一下若没拦，滚动一旦开始就再也拦不住了（审查发现）。
+     挂在封面元素自己身上（触摸事件的 target 是按下时的元素，必然在封面里），封面移除时一起没了 */
+  function guardSheetScroll(o) {
+    let from = null, block = false;
+    /* 封面里能滚的只有两处：步骤列表，和矮屏兜底时整个封面。只查这两个，不逐级读样式（每下移动都读太费） */
+    const scrollerAt = (x, y) => {
+      const n = document.elementFromPoint(x, y);
+      if (!n || !o.contains(n)) return null;
+      const road = n.closest('.pv-road');
+      const list = [road, o].filter(Boolean).filter(s => s.scrollHeight > s.clientHeight + 1);
+      return list;
+    };
+    const canGo = (s, dy) => dy > 0 ? s.scrollTop > 0 : s.scrollTop + s.clientHeight < s.scrollHeight - 1;
+    o.addEventListener('touchstart', e => {
+      from = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, judged: false } : null;
+      block = false;
+    }, { passive: true });
+    o.addEventListener('touchmove', e => {
+      if (!from || e.touches.length !== 1) return;
+      const t = e.touches[0], dx = t.clientX - from.x, dy = t.clientY - from.y;
+      if (Math.abs(dx) < 4 && Math.abs(dy) < 4) {
+        // 还没判过：手指底下根本没有能滚的东西（标题、按钮区）就从第一下拦——
+        // 第二轮审查：放过的这几下可能让 iOS 已经开始滚下面的页面。判过了就沿用上次结论
+        const pre = !from.judged && !(scrollerAt(t.clientX, t.clientY) || []).length;
+        if ((pre || (from.judged && block)) && e.cancelable) e.preventDefault();
+        return;
+      }
+      from = { x: t.clientX, y: t.clientY, judged: true };
+      const list = Math.abs(dy) >= Math.abs(dx) ? (scrollerAt(t.clientX, t.clientY) || []) : [];
+      block = !list.some(s => canGo(s, dy));          // 这个方向还有谁能滚：交给它，否则拦
+      if (block && e.cancelable) e.preventDefault();
+    }, { passive: false });
+    /* 淡出的 280ms 里封面还在最上层：点击照样吃掉、但什么都不做。
+       不能用 pointer-events:none——那样第二下会穿透到下面的页面（打开看图、再翻一步）（第二轮审查） */
+    o.addEventListener('click', e => {
+      if (!o.classList.contains('on')) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+  }
+
   function closeSheet(o) {
     if (sheetOpen === o) sheetOpen = null;
     o.classList.remove('on');
@@ -559,22 +604,40 @@
         x.append(el('span', 'pv-n', n), el('span', 'pv-t', t));
         return x;
       };
-      const stepLi = i => li(i < resume ? 'past' : (i === resume ? 'now' : ''), i < resume ? '✓' : String(i + 1), steps[i].title || `第 ${i + 1} 步`);
+      /** 整行可点：鼠标点、回车、空格都算（li 不是按钮，键盘要自己接） */
+      const tappable = (x, label, fn) => {
+        x.setAttribute('role', 'button');
+        x.tabIndex = 0;
+        x.setAttribute('aria-label', label);
+        x.addEventListener('click', fn);
+        x.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+      };
+      /* 每一步点一下直接跳到那一步（用户 2026-10-16 要求）。右边的箭头朝右＝「进去」，
+         跟折叠行朝下的箭头（＝「原地展开」）区分开 */
+      const stepLi = i => {
+        const t = steps[i].title || `第 ${i + 1} 步`;
+        const x = li(i < resume ? 'past go' : (i === resume ? 'now go' : 'go'), i < resume ? '✓' : String(i + 1), t);
+        x.appendChild(el('i', 'pv-chev'));
+        tappable(x, `跳到第 ${i + 1} 步：${t}`, () => { closeSheet(o); goto(i, false); });
+        return x;
+      };
       /* 折起来的那一行（「前 N 步已完成」/「还有 N 步」）点一下原地展开成完整步骤（用户 2026-10-16 要求）。
          右边一个下箭头提示能点；整行都是热区 */
       const fold = (cls, n, t, from, to) => {
         const x = li(cls + ' fold', n, t);
         x.appendChild(el('i', 'pv-chev'));
-        x.setAttribute('role', 'button');
-        x.tabIndex = 0;
-        x.setAttribute('aria-label', t + '，点开查看');
-        const open = () => {
+        tappable(x, t + '，点开查看', () => {
           const rows = [];
           for (let i = from; i < to; i++) rows.push(stepLi(i));
           x.replaceWith(...rows);
-        };
-        x.addEventListener('click', open);
-        x.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+          /* 列表现在是自己滚的（展开全部会比一屏高）：把刚展开的那几行尽量滚进可见范围，
+             第一行优先——展开底部那行时不这么做，新出来的步骤全在列表下沿外面，看着像没反应 */
+          const a = rows[0], z = rows[rows.length - 1];
+          ol.scrollTop = Math.max(0, Math.min(a.offsetTop, z.offsetTop + z.offsetHeight - ol.clientHeight));
+          // 横屏这类矮屏是整个封面在滚：也要让第一行进到可见范围（按钮区 sticky 的高度由 scroll-padding 让开）
+          a.scrollIntoView({ block: 'nearest' });
+          rows[0].focus({ preventScroll: true });
+        });
         ol.appendChild(x);
       };
       // 只露 5 步：以「接下来这步」为准往前留 2 步，更早做完的折成一行；后面的也折成一行

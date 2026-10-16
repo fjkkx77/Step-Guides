@@ -12,7 +12,7 @@ const PORT = 8879;   // 老测试脚本写死了这个端口
 const SUITE = [
   'selftest', 'verify-audit', 'verify', 'verify-writer', 'verify-editor', 'verify-gestures', 'verify-steps',
   'verify-long', 'verify-moveto', 'verify-title', 'verify-more', 'verify-zoom', 'verify-zoom-feel', 'verify-zoom-smooth',
-  'verify-paste', 'verify-img', 'verify-reader-nav', 'verify-immersion', 'verify-qr', 'verify-scan'
+  'verify-paste', 'verify-img', 'verify-reader-nav', 'verify-immersion', 'verify-cover', 'verify-dblclick', 'verify-qr', 'verify-scan'
 ];
 
 (async () => {
