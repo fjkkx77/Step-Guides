@@ -46,7 +46,15 @@ html[data-mode="long"] .done .again{
   margin:10px auto 0;padding:0 18px;border-radius:22px;
   background:rgba(91,87,216,.10);color:var(--brand);font-size:15px;font-weight:600;
 }
-.bottom #next.restart{color:var(--brand);font-weight:600}
+/* 前进是主角（实心品牌色），后退退成次要的窄按钮（2026-10-16） */
+.bottom #prev{flex:0 0 auto;padding:0 16px;color:var(--ink2)}
+.bottom #next{flex:1;background:var(--brand-fill);border-color:transparent;color:#fff;font-weight:600}
+/* 宽屏：文字收进居中的一栏，跟居中的截图对齐；底栏按钮不横跨整个屏幕 */
+@media (min-width:900px){
+  html[data-mode="step"] .say{width:100%;max-width:640px;margin-left:auto;margin-right:auto}
+  .bottom{justify-content:center}
+  .bottom #next{flex:0 1 420px}
+}
 
 /* ── 电脑两侧翻页区 ───────────────────────────────────
    宽屏 + 逐步模式才出现。页面内容往中间收 --side，两侧留出的空白整条都是热区。
@@ -126,12 +134,12 @@ html[data-mode="long"] .done .again{
   scroll-snap-align:center;
   min-width:0;min-height:0;
   display:flex;flex-direction:column;
-  padding:8px 14px 0;
+  padding:12px 16px 0;
 }
 .shot{
   flex:1;min-height:0;
   display:flex;align-items:center;justify-content:center;
-  position:relative;
+  position:relative;padding-bottom:10px;
 }
 /* img 上写了 width/height 属性，浏览器据此预留比例，图片加载出来不会跳动 */
 .shot img{
@@ -142,19 +150,28 @@ html[data-mode="long"] .done .again{
 }
 .say{
   flex:0 0 auto;
-  background:var(--card);border-radius:var(--radius);
-  padding:12px 14px;margin:10px 0 12px;
-  box-shadow:0 1px 2px rgba(0,0,0,.05);
-  max-height:34vh;overflow:auto;overscroll-behavior:contain;
+  padding:2px 2px 0;margin:0 0 12px;
+  max-height:38vh;overflow:auto;overscroll-behavior:contain;
 }
-.say .h{display:flex;align-items:flex-start;gap:9px;margin-bottom:5px}
+/* 标题区（2026-10-16，用户三选一选的 A）：紫色「第 N 步」+ 大标题，不用底色圆圈。
+   依据 HIG Typography「用字重、字号、颜色表达层级」；字号取 iOS 文字样式表：
+   小标签 = Subheadline 15/20 Semibold，标题 = Title 1 28/34 Bold */
+.say .h{display:flex;align-items:flex-start;gap:9px;margin-bottom:8px}
+.ht{min-width:0}
+.kicker{display:block;font-size:15px;line-height:20px;font-weight:600;color:var(--brand);margin-bottom:2px}
+html[data-mode="step"] .badge{display:none}     /* 序号由「第 N 步」说了；长文模式里它是时间轴圆点 */
 .badge{
   flex:0 0 auto;
   display:inline-flex;align-items:center;justify-content:center;
   min-width:26px;height:26px;padding:0 8px;border-radius:13px;
   background:var(--brand-fill);color:#fff;font-size:14px;font-weight:600;line-height:1;
 }
-.say h2{margin:0;font-size:17px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.say h2{margin:0;font-size:28px;font-weight:700;line-height:34px;overflow-wrap:anywhere}
+/* 点「做好了」：「第 N 步」后面先冒出「✓ 完成」，再翻页 */
+.kicker::after{content:"";display:inline-block;width:0;opacity:0;color:#1E7A34;transition:opacity .15s}   /* 页面浅灰底上 #248A3D 只有约 3.9:1，深一档到约 4.8:1 */
+.page.ticked .kicker::after{content:" ✓ 完成";width:auto;opacity:1}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .kicker::after{color:#30D158} }
+:root[data-theme="dark"] .kicker::after{color:#30D158}
 /* 网址、密码、序列号这类不断行的长串要能断开，否则整页左右晃（审查 P2-10） */
 .say p{margin:0;font-size:16px;line-height:1.72;color:var(--ink2);white-space:pre-wrap;overflow-wrap:anywhere}
 
@@ -175,7 +192,7 @@ html[data-mode="step"] .say:not(.open) .txt p{
   display:inline-flex;align-items:center;gap:4px;
   padding-left:38px;                     /* 渐隐要有足够长度过渡，太短会像块色板 */
   font-size:14px;font-weight:600;color:var(--brand);line-height:inherit;
-  background:linear-gradient(to right,rgba(0,0,0,0),var(--card) 34%);
+  background:linear-gradient(to right,rgba(0,0,0,0),var(--bg) 34%);
   pointer-events:none;                   /* 点击交给整块 .say，这里只负责"看得见" */
 }
 .chev{
@@ -194,7 +211,8 @@ html[data-mode="step"] .say.can-open{cursor:pointer}
 html[data-mode="long"] .more{display:none}
 html[data-mode="step"] .say.open{max-height:52vh}
 
-/* 最后一屏的完成态：step 模式下压成一行，别跟正文抢版面 */
+/* 最后一屏的完成态：逐步模式由完成页（reader.js showFinish）接管，这里只在长文模式出现 */
+html[data-mode="step"] .done{display:none}
 .done{padding:6px 0 0;color:var(--muted);font-size:14px}
 .done b{color:var(--ink);font-weight:600}
 html[data-mode="long"] .done{text-align:center;padding:14px 0 2px;font-size:15px}
@@ -225,18 +243,55 @@ html[data-mode="long"] .top{position:sticky;top:0;z-index:20}
 html[data-mode="long"] .deck{
   display:block;overflow:visible;touch-action:auto;
 }
+/* 时间轴（2026-10-16）：用户反馈「两步之间看起来连在一起」。
+   原来是白卡片贴浅灰底、卡片间只隔 12px，标题还在每步末尾——第 2 步的字紧挨着第 3 步的图。
+   现在：每步由「第 N 步 + 大标题」开头；左边一条竖线串起所有步骤，每步一个圆点（看过的实心）；
+   步与步之间留 40px，远大于步内间距（格式塔「接近性」：组间距要明显大于组内距）。 */
+html[data-mode="long"] .deck{padding:4px 0 24px;max-width:760px;margin:0 auto}
 html[data-mode="long"] .page{
-  width:auto;height:auto;
-  background:var(--card);border-radius:var(--radius);
-  margin:12px;padding:12px;box-shadow:0 1px 2px rgba(0,0,0,.05);
+  position:relative;display:flex;flex-direction:column;
+  width:auto;height:auto;margin:0;padding:0 16px 40px 58px;
+  transition:opacity .3s ease;
 }
-html[data-mode="long"] .shot{display:block}
+html[data-mode="long"] .page::before{
+  content:"";position:absolute;left:31px;top:0;bottom:0;width:2px;
+  background:rgba(120,120,130,.32);
+}
+html[data-mode="long"] .page:first-child::before{top:24px}
+html[data-mode="long"] .page:last-child::before{bottom:auto;height:24px}
+html[data-mode="long"] .page.past::before{background:var(--brand)}
+/* .say 拆开（display:contents），标题行才能在整步范围内吸顶，而不是只在文字那一小段里 */
+html[data-mode="long"] .say{display:contents}
+/* 步骤标题吸顶：滑进这一步它就挂在顶栏下面，直到下一步把它顶走（iPhone「通讯录」分组标题那种） */
+html[data-mode="long"] .say .h{
+  order:0;position:sticky;top:var(--toph, 57px);z-index:5;
+  margin:0 -16px 0 -58px;padding:10px 16px;gap:16px;align-items:center;
+  background:var(--bg);
+}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  html[data-mode="long"] .say .h{
+    background:var(--bar);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  }
+}
+html[data-mode="long"] .say h2{font-size:22px;line-height:28px}   /* Title 2：吸顶时不占太多高度 */
+html[data-mode="long"] .page.past .kicker{color:var(--muted)}
+/* 时间轴圆点：没到的空心、当前的实心带光晕、看过的实心 */
+html[data-mode="long"] .badge{
+  flex:0 0 14px;min-width:14px;width:14px;height:14px;padding:0;margin:0 0 0 9px;border-radius:7px;
+  font-size:0;color:transparent;background:var(--bg);border:2px solid rgba(120,120,130,.5);
+}
+html[data-mode="long"] .page.is-cur .badge{background:var(--brand-fill);border-color:var(--brand-fill);
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--brand) 22%, transparent)}
+html[data-mode="long"] .page.past .badge{background:var(--brand-fill);border-color:var(--brand-fill)}
+html[data-mode="long"] .txt{order:1;margin:2px 0 12px}
+html[data-mode="long"] .shot{order:2;display:block;padding:0}
+html[data-mode="long"] .done{order:3}
 /* 长文模式本来就是靠上下滚动看的，图给到 70vh：
    实测 42vh 时 390 档只有 161px 宽（截图里的字读不出来），70vh 能到 271px */
-html[data-mode="long"] .shot img{max-height:70vh;margin:0 auto}
-html[data-mode="long"] .say{
-  background:none;box-shadow:none;max-height:none;padding:0;margin:10px 0 0;overflow:visible;
-}
+html[data-mode="long"] .shot img{max-height:70vh;margin:0}
+/* 只亮当前步（「目录」面板里的开关，默认关；用户要真机试过再定） */
+html.dim[data-mode="long"] .page:not(.is-cur){opacity:.38}
 html[data-mode="long"] .bottom,
 html[data-mode="long"] .topbar-progress{display:none}
 
@@ -249,10 +304,11 @@ html[data-mode="long"] .topbar-progress{display:none}
   .topbar-progress{display:none}
   .top{padding-top:calc(3px + env(safe-area-inset-top));padding-bottom:3px}
   .top h1{font-size:15px}
-  .page{padding:3px 12px 0}
-  .say{padding:8px 11px;margin:5px 0 6px}
-  .say .h{margin-bottom:3px}
-  .say h2{font-size:15px;line-height:1.3}
+  .page{padding:6px 14px 0}
+  .say{padding:0 2px;margin:0 0 8px}
+  .say .h{margin-bottom:4px}
+  .kicker{font-size:13px;line-height:18px}
+  html[data-mode="step"] .say h2{font-size:24px;line-height:30px}
   .say p{font-size:15px;line-height:1.55}
   /* 这里曾经写 `.more{display:none}`「省高度」——结果把唯一能看出"还能展开"的提示，
      恰恰在文字被裁得最狠（1~2 行）的那一档藏掉了，用户反馈「以为就这么多内容」。
@@ -268,7 +324,7 @@ html[data-mode="long"] .topbar-progress{display:none}
    正是最需要把高度让给截图的那一档 */
 @media (max-height:660px){
   html[data-mode="step"] .say:not(.open) .txt p{-webkit-line-clamp:1}
-  .say h2{font-size:14px}
+  html[data-mode="step"] .say h2{font-size:22px;line-height:28px}
 }
 
 /* 曾经在矮屏（≤640px 高）把文字改成浮在图上的一层，为的是给 320×568 腾高度。
@@ -421,11 +477,6 @@ html[data-fx] .shot img{
     0 1px 2px rgba(16,18,40,.06),
     0 10px 28px -8px rgba(16,18,40,.20);
 }
-html[data-fx] .say{
-  box-shadow:
-    0 1px 2px rgba(16,18,40,.05),
-    0 8px 22px -10px rgba(16,18,40,.18);
-}
 
 /* ── 入场：图先起，字依次跟上 ──────────────────────────
    只在「用按钮/面板/键盘跳到某一步」和首次打开时播，**手指滑动翻页时不播**。
@@ -524,3 +575,49 @@ html:not([data-fx="b"]) .segs{display:none}
     transition-duration:.01ms !important;
   }
 }
+
+/* ══ 封面 / 完成页（2026-10-16，reader.js showCover / showFinish）══════════ */
+.pv{
+  position:fixed;inset:0;z-index:80;background:var(--bg);color:var(--ink);
+  display:flex;flex-direction:column;overflow:auto;overscroll-behavior:contain;
+  padding:calc(28px + env(safe-area-inset-top)) 24px calc(16px + env(safe-area-inset-bottom));
+  opacity:0;transform:translateY(12px);
+  transition:opacity .28s ease, transform .28s cubic-bezier(.22,1,.36,1);
+}
+.pv.on{opacity:1;transform:none}
+.pv-box{flex:1;width:100%;max-width:520px;margin:0 auto}
+.pv-kicker{font-size:15px;font-weight:600;color:var(--brand);margin-top:8vh}
+.pv-title{font-size:30px;line-height:1.25;font-weight:800;margin:6px 0 10px;overflow-wrap:anywhere}
+.pv-meta{font-size:16px;color:var(--muted);margin:0 0 22px}
+.pv-road{list-style:none;margin:0;padding:6px 0;background:var(--card);border-radius:var(--radius)}
+.pv-road li{display:flex;align-items:center;gap:12px;padding:10px 14px;font-size:16px;line-height:1.4}
+.pv-road li + li{border-top:1px solid var(--line)}
+.pv-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pv-n{flex:0 0 26px;height:26px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;color:var(--muted);border:1.5px solid rgba(120,120,130,.4)}
+.pv-road li.now .pv-n,.pv-road li.past .pv-n{background:var(--brand-fill);border-color:var(--brand-fill);color:#fff}
+.pv-road li.past .pv-t,.pv-road li.rest{color:var(--muted)}
+.pv-road li.rest:not(.past) .pv-n{border-style:dashed}
+/* 按钮贴底：矮屏（320×568）上路线图放不下时，滚的是路线图，「开始」一直看得见、够得着 */
+.pv-act{position:sticky;bottom:0;width:100%;max-width:520px;margin:16px auto 0;padding-top:8px;background:var(--bg);
+  display:flex;flex-direction:column;gap:8px}
+.pv-go{height:52px;border-radius:14px;background:var(--brand-fill);color:#fff;font-size:17px;font-weight:600}
+.pv-sub{height:48px;border-radius:14px;color:var(--brand);font-size:16px}
+.finish .pv-box{text-align:center}
+.pv-check{width:76px;height:76px;border-radius:38px;margin:14vh auto 18px;background:#34C759;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;
+  animation:pvPop .5s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pvPop{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
+@media (max-height:700px){ .pv-kicker{margin-top:2vh} .pv-title{font-size:26px} .pv-check{margin-top:6vh} }
+@media (prefers-reduced-motion: reduce){ .pv,.pv-check{transition:none;animation:none} }
+
+/* 「目录」面板里的开关（iOS 开关样式）。标题和关闭键之间 */
+.steps-head b{margin-right:auto}
+.dimsw{display:flex;align-items:center;gap:8px;min-height:44px;margin-right:4px;font-size:14px;color:var(--ink2);cursor:pointer}
+.dimsw input{position:absolute;opacity:0;width:1px;height:1px}
+.dimsw i{position:relative;flex:0 0 auto;width:44px;height:26px;border-radius:13px;background:rgba(120,120,130,.32);transition:background .2s}
+.dimsw i::after{content:"";position:absolute;left:2px;top:2px;width:22px;height:22px;border-radius:11px;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .22s cubic-bezier(.22,1,.36,1)}
+.dimsw input:checked + i{background:#34C759}
+.dimsw input:checked + i::after{transform:translateX(18px)}
+.dimsw input:focus-visible + i{outline:2px solid var(--brand);outline-offset:2px}

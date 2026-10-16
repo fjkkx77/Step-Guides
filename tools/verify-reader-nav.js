@@ -1,7 +1,8 @@
 /* 2026-09-26 三件事：
    ① 发布成功后不再停在写作页：主按钮去看教程、「我的教程」/关掉弹窗都去教程库并高亮刚发的那份
       （用页面内打桩的假 GitHub，不碰真仓库）
-   ② 阅读页：左上角返回键（站内来的回上一页、直接打开的回首页）、底栏「回到第一步」、最后一步「从头再看」
+   ② 阅读页：左上角返回键（站内来的回上一页、直接打开的回首页）、底栏「回到第一步」、
+      最后一步「全部做完了」→ 完成页 →「从头再看」（2026-10-16 改版前是主按钮直接变「从头再看」）
    ③ 电脑宽屏：左右两侧整条翻页热区；窄屏/长文模式不出现；内容不被热区盖住
    用法：node tools/verify-reader-nav.js [--base=https://jc.wbztl.xyz]（②③ 可验线上；① 只在本地跑） */
 const { open, sleep } = require('./cdp.js');
@@ -49,16 +50,22 @@ async function phone(w, h) {
     await c.ev(`document.querySelectorAll('.scell').length ? 0 : 0`);
     await c.ev(`(() => { const d = document.getElementById('deck'), p = document.querySelector('.page[data-i="${n - 1}"]'); d.scrollTo({ left: p.offsetLeft }); })()`);
     await sleep(900);
-    // 逐步模式的最后一步：「下一步」变成「↺ 从头再看」（不在说明卡里加按钮，免得挤窄矮屏截图）
+    // 逐步模式的最后一步：主按钮变成「全部做完了」（不在说明区加按钮，免得挤窄矮屏截图）
     const endBtn = JSON.parse(await c.ev(`JSON.stringify({ t: document.getElementById('next').textContent.trim(),
       dis: document.getElementById('next').disabled, h: document.getElementById('next').getBoundingClientRect().height,
       cardBtn: getComputedStyle(document.querySelector('.page[data-i="${n - 1}"] .again')).display })`));
-    chk(`${L} 最后一步「下一步」变成「从头再看」（可点、≥44 高，说明卡里不另加按钮）`,
-        /从头再看/.test(endBtn.t) && !endBtn.dis && endBtn.h >= 44 && endBtn.cardBtn === 'none', `${endBtn.t} / ${Math.round(endBtn.h)}px`);
-    await c.ev(`document.getElementById('next').click()`); await sleep(900);
+    chk(`${L} 最后一步主按钮变成「全部做完了」（可点、≥44 高，说明区里不另加按钮）`,
+        /全部做完了/.test(endBtn.t) && !endBtn.dis && endBtn.h >= 44 && endBtn.cardBtn === 'none', `${endBtn.t} / ${Math.round(endBtn.h)}px`);
+    await c.ev(`document.getElementById('next').click()`); await sleep(700);
+    const fin = JSON.parse(await c.ev(`JSON.stringify((() => { const o = document.querySelector('.pv.finish');
+      const b = o && [...o.querySelectorAll('button')].find(x => /从头再看/.test(x.textContent));
+      return { open: !!o, again: !!b, h: b ? b.getBoundingClientRect().height : 0 }; })())`));
+    chk(`${L} 点「全部做完了」弹出完成页，里面有「从头再看」（≥44 高）`, fin.open && fin.again && fin.h >= 44, JSON.stringify(fin));
+    await c.ev(`[...document.querySelectorAll('.pv.finish button')].find(x => /从头再看/.test(x.textContent)).click()`); await sleep(900);
     const back1 = await count(c);
-    chk(`${L} 点「从头再看」回到 1，按钮文字恢复「下一步」`,
-        back1.startsWith('1 /') && /下一步/.test(await c.ev(`document.getElementById('next').textContent`)), back1);
+    chk(`${L} 点「从头再看」回到 1、完成页收起，按钮文字恢复「做好了，下一步」`,
+        back1.startsWith('1 /') && /下一步/.test(await c.ev(`document.getElementById('next').textContent`)) &&
+        !(await c.ev(`!!document.querySelector('.pv.finish')`)), back1);
     // 长文模式：卡片里的「从头再看」
     await toStep(c, 'long'); await sleep(600);
     const lg = JSON.parse(await c.ev(`JSON.stringify((() => { const b = document.querySelector('.page[data-i="${n - 1}"] .again');
@@ -91,6 +98,8 @@ async function desk(w, h) {
   const c = await open(w, h, 1);
   try {
     await c.goto(T); await ready(c); await toStep(c); await sleep(600);
+    // 2026-10-16 起一打开先是封面，下面要用真实鼠标点热区，得先点「开始」把封面收起来
+    await c.ev(`(() => { const b = document.querySelector('.pv.cover .pv-go'); if (b) b.click(); })()`); await sleep(500);
     const geo = async () => JSON.parse(await c.ev(`JSON.stringify((() => {
       const R = e => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; };
       const sp = document.querySelector('.side-prev'), sn = document.querySelector('.side-next'), d = document.getElementById('deck');

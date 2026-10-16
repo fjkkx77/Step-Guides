@@ -55,8 +55,15 @@
        表现为**偶发**：取决于上次离开时停在哪个模式（记在 localStorage 里）。2026-09-26 定位 */
     if (m === 'step' && steps.length) requestAnimationFrame(measureClamp);
     if (addSides.fit) requestAnimationFrame(addSides.fit);
+    requestAnimationFrame(fitTop);
     closeTitlePop();
   };
+
+  /* 长文模式里每一步的标题吸顶，挂在顶栏正下方——得知道顶栏多高（安全区、字号设置都会影响） */
+  function fitTop() {
+    const t = $('.top');
+    if (t) document.documentElement.style.setProperty('--toph', t.offsetHeight + 'px');
+  }
 
   /* ── 点标题看完整标题 ─────────────────────────────────
      窄屏标题会被省略号截断。点一下在顶栏下方浮出一张卡片显示全文，
@@ -110,6 +117,7 @@
     $('#title').textContent = data.title;
     requestAnimationFrame(() => $('#title')._sync && $('#title')._sync());
     steps = data.steps;
+    steps.title = data.title;
 
     const deck = $('#deck');
     deck.replaceChildren(...steps.map((s, i) => {
@@ -128,7 +136,14 @@
 
       const say = el('div', 'say');
       const h = el('div', 'h');
-      h.append(el('span', 'badge', String(i + 1)), el('h2', null, s.title || ''));
+      /* 标题区（2026-10-16 改版，用户从三套里选的 A）：
+         紫色小字「第 N 步」在上、大标题在下，层级只靠字号/字重/颜色（HIG Typography 原文的做法），不用底色圆圈。
+         .badge 还留着：逐步模式里藏掉，长文模式里它是时间轴上的那个圆点 */
+      const badge = el('span', 'badge', String(i + 1));
+      badge.setAttribute('aria-hidden', 'true');
+      const ht = el('div', 'ht');
+      ht.append(el('span', 'kicker', `第 ${i + 1} 步`), el('h2', null, s.title || ''));
+      h.append(badge, ht);
       /* 正文和「更多」放在同一个定位容器里：「更多」叠在末行右端、背后垫一层渐隐，
          **不占额外行高**。矮屏当初之所以把提示整个藏掉就是为了省高度，
          用这种叠加式提示就没有那个取舍了（省略号只说明"被截了"，
@@ -163,7 +178,9 @@
         say.appendChild(done);
       }
 
-      page.append(shot, say);
+      /* 文字在上、截图在下（2026-10-16）：看教程的顺序是「先知道要干什么 → 再去图里找在哪 → 点下一步」，
+         从上往下一趟走完，最后正好落在按钮上。长文模式里每一步也因此由标题开头，步与步之间才分得开 */
+      page.append(say, shot);
       return page;
     }));
 
@@ -172,7 +189,7 @@
     // 空字符串也会命中 html[data-fx] 选择器，关掉必须把属性整个删掉
     if (FX) document.documentElement.dataset.fx = FX;
     else delete document.documentElement.dataset.fx;
-    requestAnimationFrame(() => { measureClamp(); parallax(); paintSegs(); playEnter(cur); if (addSides.fit) addSides.fit(); restorePos(); });
+    requestAnimationFrame(() => { measureClamp(); parallax(); paintSegs(); playEnter(cur); if (addSides.fit) addSides.fit(); fitTop(); restorePos(); showCover(); });
     preload();
     /* 裁几行是跟视口高度走的（矮屏 3→2→1 行），所以转屏/改窗口后必须重量一次，
        否则横过来明明放得下却还挂着「更多」，或者竖回去被裁了却没提示 */
@@ -282,12 +299,15 @@
     $('#count').textContent = `${cur + 1} / ${n}`;
     $('#fill').style.width = ((cur + 1) / n * 100) + '%';
     $('#prev').disabled = cur === 0;
-    /* 最后一步：「下一步」不再置灰，而是变成「↺ 从头再看」——走到终点时主按钮换成终点动作，
-       不占任何额外高度（在说明卡里另加按钮会把矮屏最后一步的截图挤窄，回归测试抓到过） */
-    const atEnd = cur === n - 1 && n > 1;
-    $('#next').disabled = n <= 1;
+    /* 「下一步」改叫「做好了，下一步」（2026-10-16）：把"看教程"变成"一步步做任务"，
+       每按一次是完成了一件小事。最后一步变成「全部做完了」→ 弹完成页（从头再看在完成页里）。
+       终点动作仍由主按钮兼任、不在说明区另加按钮：那会把矮屏最后一步的截图挤窄（回归测试抓到过） */
+    const atEnd = cur === n - 1;
+    $('#next').disabled = false;
     $('#next').classList.toggle('restart', atEnd);
-    $('#next').textContent = atEnd ? '↺ 从头再看' : '下一步 ›';
+    $('#next').textContent = atEnd ? '✓ 全部做完了' : '做好了，下一步 ›';
+    // 长文时间轴：看过的步骤圆点变实心、线变品牌色
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('past', +p.dataset.i < cur));
     const fb = $('#firstbtn');
     if (fb) fb.disabled = cur === 0;
     const sp = $('.side-prev'), sn = $('.side-next');
@@ -433,6 +453,7 @@
     const aside = el('aside', 'steps');
     aside.innerHTML =
       '<div class="steps-head"><b>全部步骤</b>' +
+      '<label class="dimsw"><span>长文只亮当前步</span><input type="checkbox" role="switch"><i aria-hidden="true"></i></label>' +
       '<button class="steps-close tap" type="button" aria-label="关闭">✕</button></div>' +
       '<div class="steps-grid"></div>';
     mask.appendChild(aside);
@@ -440,6 +461,12 @@
 
     mask.addEventListener('click', e => { if (e.target === mask) closeSteps(); });
     aside.querySelector('.steps-close').addEventListener('click', closeSteps);
+    const sw = aside.querySelector('.dimsw input');
+    sw.checked = document.documentElement.classList.contains('dim');
+    sw.addEventListener('change', () => {
+      try { localStorage.setItem(DIM_KEY, sw.checked ? '1' : '0'); } catch (e) { /* 隐私模式 */ }
+      applyDim(sw.checked);
+    });
 
     panel = { btn, mask, aside, grid: aside.querySelector('.steps-grid') };
     return panel;
@@ -477,6 +504,98 @@
     if (!panel) return;
     panel.mask.classList.remove('on');
     setTimeout(() => { if (panel && !panel.mask.classList.contains('on')) panel.mask.hidden = true; }, 220);
+  }
+
+  /* ── 封面 / 完成页（2026-10-16） ──────────────────────
+     封面：标题 + 共几步 + 前 5 步路线图 + 「开始」。点「开始」是一个小小的承诺动作；
+     再次打开时变成「已经做完 N 步，还剩 M 步」+「继续第 N 步」——做完的折成一行，只露接下来几步。
+     完成页：点完最后一步出来，给一个明确的终点。 */
+  let sheetOpen = null;
+  function openSheet(cls, build) {
+    const o = el('div', 'pv ' + cls);
+    o.setAttribute('role', 'dialog');
+    o.setAttribute('aria-modal', 'true');
+    build(o);
+    document.body.appendChild(o);
+    sheetOpen = o;
+    requestAnimationFrame(() => {
+      o.classList.add('on');
+      const b = o.querySelector('.pv-go');
+      if (b) b.focus({ preventScroll: true });
+    });
+    return o;
+  }
+  function closeSheet(o) {
+    if (sheetOpen === o) sheetOpen = null;
+    o.classList.remove('on');
+    setTimeout(() => o.remove(), 280);
+  }
+  const pvBtn = (cls, txt, fn) => {
+    const b = el('button', cls + ' tap', txt);
+    b.type = 'button';
+    b.addEventListener('click', fn);
+    return b;
+  };
+
+  function showCover() {
+    if (!steps.length) return;
+    // 续看：跟 restorePos 用同一份记录（预览/导出版不记位置，也就没有续看）
+    let resume = 0;
+    if (!window.__DATA) {
+      try {
+        const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+        if (p && p.i > 0 && p.i < steps.length && Date.now() - p.t <= POS_TTL) resume = p.i;
+      } catch (e) { /* 隐私模式 */ }
+    }
+    openSheet('cover', o => {
+      const box = el('div', 'pv-box');
+      box.append(el('div', 'pv-kicker', '图文教程'), el('h1', 'pv-title', steps.title || document.title));
+      box.append(el('p', 'pv-meta', resume
+        ? `已经做完 ${resume} 步，还剩 ${steps.length - resume} 步`
+        : `共 ${steps.length} 步 · 一屏只做一件事，做好了再点下一步`));
+      const ol = el('ol', 'pv-road');
+      const row = (cls, n, t) => {
+        const li = el('li', cls);
+        li.append(el('span', 'pv-n', n), el('span', 'pv-t', t));
+        ol.appendChild(li);
+      };
+      // 只露 5 步：以「接下来这步」为准往前留 2 步，更早做完的折成一行；后面的只说还有几步
+      const start = Math.max(0, Math.min(resume - 2, steps.length - 5));
+      if (start > 0) row('past rest', '✓', `前 ${start} 步已完成`);
+      steps.slice(start, start + 5).forEach((s, k) => {
+        const i = start + k;
+        row(i < resume ? 'past' : (i === resume ? 'now' : ''), i < resume ? '✓' : String(i + 1), s.title || `第 ${i + 1} 步`);
+      });
+      if (start + 5 < steps.length) row('rest', '…', `还有 ${steps.length - start - 5} 步`);
+      box.appendChild(ol);
+      const act = el('div', 'pv-act');
+      act.appendChild(pvBtn('pv-go', resume ? `继续第 ${resume + 1} 步 ›` : '开始第 1 步 ›', () => { closeSheet(o); goto(resume, false); }));
+      if (resume) act.appendChild(pvBtn('pv-sub', '从头开始', () => { closeSheet(o); goto(0, false); }));
+      o.append(box, act);
+    });
+  }
+
+  function showFinish() {
+    openSheet('finish', o => {
+      const box = el('div', 'pv-box');
+      box.append(el('div', 'pv-check', '✓'), el('h1', 'pv-title', '全部完成！'),
+        el('p', 'pv-meta', `${steps.length} 步都做完了。有不明白的随时问我`));
+      const act = el('div', 'pv-act');
+      act.append(
+        pvBtn('pv-go', '好的', () => closeSheet(o)),
+        pvBtn('pv-sub', '↺ 从头再看', () => { closeSheet(o); goto(0, false); }));
+      o.append(box, act);
+    });
+  }
+
+  /* ── 只亮当前步（长文模式，开关在「目录」面板里，默认关）──
+     用户 2026-10-16 要求做成开关上线、真机上试了再定。记在本机 */
+  const DIM_KEY = 'sg.dim';
+  const loadDim = () => { try { return localStorage.getItem(DIM_KEY) === '1'; } catch (e) { return false; } };
+  function applyDim(on) {
+    document.documentElement.classList.toggle('dim', on);
+    const sw = panel && panel.aside.querySelector('.dimsw input');
+    if (sw) sw.checked = on;
   }
 
   function markCurrentStep() {
@@ -644,7 +763,21 @@
 
     $('#modebtn').addEventListener('click', () => setMode(mode() === 'step' ? 'long' : 'step'));
     $('#prev').addEventListener('click', () => goto(cur - 1));
-    $('#next').addEventListener('click', () => goto(cur >= steps.length - 1 ? 0 : cur + 1));
+    let ticking = false;
+    $('#next').addEventListener('click', () => {
+      if (ticking) return;
+      if (cur >= steps.length - 1) { showFinish(); return; }
+      const p = document.querySelector(`.page[data-i="${cur}"]`);
+      if (!p || reduceMotion()) { goto(cur + 1); return; }
+      // 先在「第 N 步」旁打个勾（260ms）再翻过去：按下去的这一下要有"完成了"的回应
+      // 目标在按下时就定死：打勾这 260ms 里手指要是又滑了一下，不能在滑到的那步上再 +1
+      const to = cur + 1;
+      ticking = true;
+      p.classList.add('ticked');
+      setTimeout(() => { p.classList.remove('ticked'); ticking = false; goto(to); }, 260);
+    });
+    applyDim(loadDim());
+    addEventListener('resize', fitTop);
 
     let tick = false;
     const onScroll = () => {
@@ -660,6 +793,7 @@
       if (e.key === 'Escape' && titlePop) { closeTitlePop(); return; }
       if (e.key === 'Escape' && panel && !panel.mask.hidden) { closeSteps(); return; }
       if ($('#zoom') && $('#zoom').open) return;
+      if (sheetOpen) { if (e.key === 'Escape' && sheetOpen.classList.contains('finish')) closeSheet(sheetOpen); return; }
       if ((e.key === 'Enter' || e.key === ' ') && document.activeElement?.classList.contains('say')) {
         document.activeElement.click(); e.preventDefault(); return;
       }
