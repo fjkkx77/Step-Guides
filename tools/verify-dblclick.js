@@ -20,6 +20,8 @@ const J = async (c, expr) => JSON.parse(await c.ev(`JSON.stringify(${expr})`));
 
 (async () => {
   const c = await open(1280, 800, 1);
+  // 这是电脑鼠标的测试：关掉 cdp.js 默认的触摸模拟，否则媒体查询报 pointer:coarse，拿到的是手机版式（2026-10-17 起电脑版式只认有鼠标的屏）
+  await c.send('Emulation.setTouchEmulationEnabled', { enabled: false });
   const mouse = (type, x, y, n) => c.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: n });
   const click = async (x, y, n) => { await mouse('mousePressed', x, y, n); await mouse('mouseReleased', x, y, n); };
   const dbl = async (x, y) => { await click(x, y, 1); await sleep(60); await click(x, y, 2); };

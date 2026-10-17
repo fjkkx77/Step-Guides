@@ -49,7 +49,9 @@ html[data-mode="long"] .done .again{
 /* 前进是主角（实心品牌色），后退退成次要的窄按钮（2026-10-16） */
 .bottom #prev{flex:0 0 auto;padding:0 16px;color:var(--ink2)}
 .bottom #next{flex:1;background:var(--brand-fill);border-color:transparent;color:#fff;font-weight:600}
-/* 宽屏：文字收进居中的一栏，跟居中的截图对齐；底栏按钮不横跨整个屏幕 */
+/* 宽屏：文字收进居中的一栏，跟居中的截图对齐；底栏按钮不横跨整个屏幕。
+   ⚠ 现在只对「宽但没有鼠标」的屏（横屏手机、iPad）生效：有鼠标的电脑由文件末尾「电脑版式」一节整个盖掉
+   （2026-10-17 用户：电脑上这样「很窄、很拧巴很挤」，选了恢复改版前的通栏版式） */
 @media (min-width:900px){
   html[data-mode="step"] .say{width:100%;max-width:640px;margin-left:auto;margin-right:auto}
   .bottom{justify-content:center}
@@ -644,3 +646,50 @@ html:not([data-fx="b"]) .segs{display:none}
 .dimsw input:checked + i{background:#34C759}
 .dimsw input:checked + i::after{transform:translateX(18px)}
 .dimsw input:focus-visible + i{outline:2px solid var(--brand);outline-offset:2px}
+
+/* ══ 电脑版式（宽 ≥900px 且用鼠标）：恢复改版前的通栏布局 ══════════════════
+   2026-10-17 用户反馈：改版后电脑上「不管逐步还是长文都那么窄，很拧巴很挤，浪费大屏」。
+   原因：10-16 改版只按手机设计、只给手机出过对比图——电脑上文字收进 640px、长文整列收进 760px、
+   长文截图还贴在这一列左边。用户看了「改版前 / 现在 / 放宽 / 左文右图」四套真实页面截图，选了**恢复改版前**。
+   所以这里只在电脑上：截图在上、文字放进下面的通栏白卡片；长文每步一张通栏白卡片、截图居中；底栏两个按钮铺满。
+   保留了改版里用户认可过的东西：「第 N 步」+ 标题（不带回底色圆圈，用户说过不像 Apple）、
+   实心「做好了，下一步」、封面/完成页。
+   **只认「宽 + 有鼠标/触控板」**（any-hover:hover 且 any-pointer:fine）：只看宽度的话，横屏手机（932×430）和 iPad 也会被当成电脑——
+   用户要的是「手机保持新版式」。这些触屏宽屏维持原样（上面那条 640px 规则仍对它们生效）。
+   用 any- 而不是 hover/pointer：带触摸屏的 Windows 笔记本，主指针可能报成触摸（pointer:coarse），那就又拿到窄栏了（审查指出）；
+   代价是 iPad 接了妙控键盘会显示电脑版式。reader.js 里有同一条查询（接拔鼠标时重量「更多」），改这里要改那里
+   ⚠ 自动化测试的 cdp.js 默认开着触摸模拟（报告成 pointer:coarse），测电脑版式要先关掉，见 tools/verify-desktop.js。
+   DOM 里文字在截图前面（手机要这个顺序），电脑上用 order 换回来，不动 JS */
+@media (min-width:900px) and (any-hover:hover) and (any-pointer:fine){
+  /* 逐步模式：截图在上，文字卡片在下（左右边距由上面「两侧翻页区」的 --side 管，这里不碰） */
+  html[data-mode="step"] .page{padding-top:8px}
+  html[data-mode="step"] .shot{order:0;padding-bottom:0}
+  /* 白卡片：逐步模式是文字那块，长文模式是整步 */
+  html[data-mode="step"] .say,
+  html[data-mode="long"] .page{background:var(--card);border-radius:var(--radius);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  html[data-mode="step"] .say{
+    order:1;width:auto;max-width:none;margin:10px 0 12px;padding:12px 14px;   /* width/max-width：撤掉上面 640px 那条 */
+    max-height:34vh;                       /* 展开后的 52vh 由前面 .say.open 那条管（选择器更具体） */
+  }
+  /* 标题放在截图下面的卡片里，28px 太占高度（每多 1 行字，竖截图就矮一截）：用长文模式同一档 22/28。
+     选择器多带一个 .page，比矮屏（≤700/660px 高）那几条更具体，不靠先后顺序取胜 */
+  html[data-mode="step"] .page .say h2{font-size:22px;line-height:28px}
+  html[data-mode="step"] .page .say .h{margin-bottom:5px}
+  html[data-mode="step"] .more{background:linear-gradient(to right,rgba(0,0,0,0),var(--card) 34%)}
+  /* 底栏：两个按钮平分整行（改版前的样子）；「下一步」仍是实心主按钮 */
+  .bottom #prev,.bottom #next{flex:1;padding:0 6px}   /* 内边距要一样，不然 flex 平分后「下一步」会宽出 12px */
+
+  /* 长文模式：每步一张通栏白卡片，截图居中、文字在截图下面；电脑上不要时间轴 */
+  html[data-mode="long"] .deck{max-width:none;margin:0;padding:0 0 12px}
+  html[data-mode="long"] .page{display:flex;flex-direction:column;margin:12px;padding:12px}
+  html[data-mode="long"] .page::before{display:none}
+  html[data-mode="long"] .shot{order:0;display:block;padding:0}
+  html[data-mode="long"] .shot img{display:block;margin:0 auto}
+  html[data-mode="long"] .say{display:block;order:1;margin:10px 0 0;padding:0;max-height:none;overflow:visible}
+  html[data-mode="long"] .say .h{
+    position:static;top:auto;z-index:auto;margin:0 0 5px;padding:0;gap:9px;align-items:flex-start;
+    background:none;-webkit-backdrop-filter:none;backdrop-filter:none;
+  }
+  html[data-mode="long"] .badge{display:none}       /* 手机上它是时间轴圆点；电脑没有时间轴，序号由「第 N 步」说 */
+  html[data-mode="long"] .txt{margin:0}
+}

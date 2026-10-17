@@ -197,6 +197,13 @@
     const remeasure = () => { clearTimeout(mt); mt = setTimeout(measureClamp, 120); };
     addEventListener('resize', remeasure);
     addEventListener('orientationchange', remeasure);
+    /* 电脑版式（reader.css 末尾）还跟「有没有鼠标/触控板」走：接上或拔掉鼠标（iPad 接键盘、二合一切平板模式）
+       版式会变，却不一定有 resize。这条查询要跟 CSS 里那条保持一致 */
+    try {
+      const desk = matchMedia('(min-width:900px) and (any-hover:hover) and (any-pointer:fine)');
+      const onDesk = () => { remeasure(); if (addSides.fit) requestAnimationFrame(addSides.fit); };
+      if (desk.addEventListener) desk.addEventListener('change', onDesk); else desk.addListener(onDesk);
+    } catch (e) { /* 不支持 matchMedia 的环境：只是少了这次重量 */ }
     sync();
   }
 
