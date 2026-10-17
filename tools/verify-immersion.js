@@ -53,6 +53,9 @@ async function phone(w, h) {
     chk(`${L} 展开后「开始」按钮仍在屏内`, goIn);
     await startCover(c);
     chk(`${L} 点「开始」封面收起`, !(await c.ev(`!!document.querySelector('.pv.cover')`)));
+    // 顶栏下的进度条矮屏也要在（2026-10-17：iPhone XS 在 Safari 里落进 ≤700 那档，整条被藏，用户报「看不到进度条」）
+    const pb = await J(c, `(() => { const r = document.querySelector('.topbar-progress').getBoundingClientRect(); return { h: Math.round(r.height), top: Math.round(r.top) }; })()`);
+    chk(`${L} 逐步模式顶栏下有进度条`, pb.h >= 3, JSON.stringify(pb));
 
     // ── ① 逐步模式版式
     const g = await J(c, `(() => { const p = document.querySelector('.page[data-i="0"]');
@@ -153,7 +156,8 @@ async function phone(w, h) {
 }
 
 (async () => {
-  for (const [w, h] of [[390, 844], [320, 568], [430, 932]]) await phone(w, h);
+  // 375×635 ≈ iPhone XS 在 Safari 里带上下工具栏（用户备用机；高度是估算，没在真机量过）
+  for (const [w, h] of [[390, 844], [320, 568], [430, 932], [375, 635]]) await phone(w, h);
   console.log(bad ? `\n${bad} 项未通过` : '\n全部通过');
   process.exit(bad ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

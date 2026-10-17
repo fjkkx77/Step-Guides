@@ -298,7 +298,9 @@ html[data-mode="long"] .topbar-progress{display:none}
    只压尺寸、不换形态。每省下 10px 都是给截图的 —— 1:2.2 的竖图，
    高度每多 22px，宽度才多 10px，所以这里抠得比较细 */
 @media (max-height:700px){
-  .topbar-progress{display:none}
+  /* 以前这里整条藏掉省高度——iPhone XS（812 高）在 Safari 里带上工具栏就落进这档，用户报「看不到进度条了」（2026-10-17）。
+     条本身只有 3px，留着，只把底下 6px 的空压成 3px */
+  .topbar-progress{padding:0 12px 3px}
   .top{padding-top:calc(3px + env(safe-area-inset-top));padding-bottom:3px}
   .top h1{font-size:15px}
   .page{padding:6px 14px 0}
