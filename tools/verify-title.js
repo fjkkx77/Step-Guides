@@ -12,13 +12,16 @@ let bad = 0;
 const chk = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${n}${d ? ' — ' + d : ''}`); if (!ok) bad++; };
 const waitFor = async (c, expr, n = 40) => { for (let i = 0; i < n; i++) { await sleep(250); if (await c.ev(expr)) return true; } return false; };
 
-// 逐页判断"真被裁了"（临时取消裁剪量真实高度）和"提示有没有显示"
+// 逐页判断"收起时会不会被裁"（临时摘掉 .open、取消裁剪量真实高度）和"提示有没有显示"。
+// 2026-10-17 起长正文默认展开（放得下才展开，放不下的先收着）：会被裁的那些要有提示，且提示跟状态对得上（展开＝「收起」、收起＝「更多」）
 const clampStat = `JSON.stringify((() => { let cut = 0, shown = 0, wrong = 0;
   document.querySelectorAll('.page').forEach(p => {
-    const para = p.querySelector('.txt p'), more = p.querySelector('.more');
+    const say = p.querySelector('.say'), para = p.querySelector('.txt p'), more = p.querySelector('.more');
+    const wasOpen = say.classList.contains('open'); say.classList.remove('open');
     const vis = para.clientHeight; para.classList.add('unclamp'); const full = para.scrollHeight; para.classList.remove('unclamp');
-    const isCut = full > vis + 1;
-    if (isCut) { cut++; if (!more.hidden) shown++; } else if (!more.hidden) wrong++;
+    if (wasOpen) say.classList.add('open');
+    const isCut = full > vis + 1, label = p.querySelector('.more-t').textContent;
+    if (isCut) { cut++; if (!more.hidden && label === (wasOpen ? '收起' : '更多')) shown++; } else if (!more.hidden) wrong++;
   });
   return { mode: document.documentElement.dataset.mode, cut, shown, wrong }; })())`;
 
@@ -63,14 +66,14 @@ async function run(w, h, label) {
 
     // ── ② 「更多」
     const a = JSON.parse(await c.ev(clampStat));
-    chk(`${label} 直接进逐步：被裁的都有「更多」`, a.shown === a.cut && a.wrong === 0, `被裁 ${a.cut}，有提示 ${a.shown}，多余 ${a.wrong}`);
+    chk(`${label} 直接进逐步：长正文都有提示、提示跟展开状态一致`, a.shown === a.cut && a.wrong === 0, `长正文 ${a.cut}，提示正确 ${a.shown}，多余 ${a.wrong}`);
     await c.ev(`document.getElementById('modebtn').click()`); await sleep(400);          // 停在长文（会被记住）
     await c.goto(url); await waitFor(c, `!!document.querySelector('.page')`); await sleep(600);
     const mode = await c.ev(`document.documentElement.dataset.mode`);
     await c.ev(`document.getElementById('modebtn').click()`); await sleep(600);          // 切回逐步
     const b = JSON.parse(await c.ev(clampStat));
-    chk(`${label} 上次停在长文→重开→切回逐步：被裁的都有「更多」`, mode === 'long' && b.mode === 'step' && b.cut === a.cut && b.shown === b.cut && b.wrong === 0,
-        `重开时模式=${mode}，被裁 ${b.cut}，有提示 ${b.shown}，多余 ${b.wrong}`);
+    chk(`${label} 上次停在长文→重开→切回逐步：长正文都有提示、提示跟展开状态一致`, mode === 'long' && b.mode === 'step' && b.cut === a.cut && b.shown === b.cut && b.wrong === 0,
+        `重开时模式=${mode}，长正文 ${b.cut}，提示正确 ${b.shown}，多余 ${b.wrong}`);
     await c.ev(`try { localStorage.removeItem('sg.readMode') } catch (e) {}`);
     if (c.errors && c.errors.length) chk(`${label} 无 JS 报错`, false, c.errors.join(' | '));
   } finally { await c.close(); }

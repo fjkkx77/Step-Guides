@@ -54,6 +54,7 @@
        上次停在长文模式 → 打开教程 → 切回逐步，文字被裁出了省略号，「更多」却一个都不显示。
        表现为**偶发**：取决于上次离开时停在哪个模式（记在 localStorage 里）。2026-09-26 定位 */
     if (m === 'step' && steps.length) requestAnimationFrame(measureClamp);
+    if (m !== 'step') measureClamp();   // 进长文就把「可展开按钮」标记摘掉（measureClamp 在长文里只做这一件事），不等 resize（审查指出）
     if (addSides.fit) requestAnimationFrame(addSides.fit);
     requestAnimationFrame(fitTop);
     closeTitlePop();
@@ -132,6 +133,14 @@
       img.alt = `第 ${i + 1} 步的截图`;
       img.loading = i < 2 ? 'eager' : 'lazy';
       img.addEventListener('click', () => openZoom(img.src, img.alt));
+      /* 「长正文放不放得下」要用截图宽高比算截图会有多宽（measureClamp）。
+         没加载的懒加载图量出来只有 2px（边框），不能拿渲染宽度判断——data.json 里有 w/h 就用它（写作页发布时都会写）；
+         万一没有，先当放不下（收着），等图加载完拿到原始尺寸再判一次 */
+      page._ratio = s.w && s.h ? s.w / s.h : 0;
+      page._natW = s.w || 0;                 // 图按原始像素宽显示、不会放大，算宽度时要封顶
+      if (!page._ratio) img.addEventListener('load', () => {
+        page._ratio = img.naturalWidth / img.naturalHeight || 0; page._natW = img.naturalWidth; remeasureSoon();
+      }, { once: true });
       shot.appendChild(img);
 
       const say = el('div', 'say');
@@ -158,10 +167,14 @@
 
       // 点整块文字都能展开（热区＝整块，不是一个小按钮）
       say.addEventListener('click', () => {
-        if (!say.classList.contains('can-open')) return;
+        // 长文模式不裁正文，没什么可展开的；在这儿点（比如选字）不能悄悄记成「亲手收起过」、带回逐步模式（审查指出）
+        if (mode() !== 'step' || !say.classList.contains('can-open')) return;
         animateOpen(say, () => {
           const open = say.classList.toggle('open');
+          // 记住用户亲手点过（收起=1 / 展开=0）：转屏、改窗口重量时照用户的来，不再按「放不放得下」自动改
+          say.dataset.folded = open ? '0' : '1';
           more.querySelector('.more-t').textContent = open ? '收起' : '更多';
+          say.setAttribute('aria-expanded', String(open));
         });
       });
       page._more = more;
@@ -193,15 +206,13 @@
     preload();
     /* 裁几行是跟视口高度走的（矮屏 3→2→1 行），所以转屏/改窗口后必须重量一次，
        否则横过来明明放得下却还挂着「更多」，或者竖回去被裁了却没提示 */
-    let mt = 0;
-    const remeasure = () => { clearTimeout(mt); mt = setTimeout(measureClamp, 120); };
-    addEventListener('resize', remeasure);
-    addEventListener('orientationchange', remeasure);
+    addEventListener('resize', remeasureSoon);
+    addEventListener('orientationchange', remeasureSoon);
     /* 电脑版式（reader.css 末尾）还跟「有没有鼠标/触控板」走：接上或拔掉鼠标（iPad 接键盘、二合一切平板模式）
        版式会变，却不一定有 resize。这条查询要跟 CSS 里那条保持一致 */
     try {
-      const desk = matchMedia('(min-width:900px) and (any-hover:hover) and (any-pointer:fine)');
-      const onDesk = () => { remeasure(); if (addSides.fit) requestAnimationFrame(addSides.fit); };
+      const desk = matchMedia(DESK_Q);
+      const onDesk = () => { remeasureSoon(); if (addSides.fit) requestAnimationFrame(addSides.fit); };
       if (desk.addEventListener) desk.addEventListener('change', onDesk); else desk.addListener(onDesk);
     } catch (e) { /* 不支持 matchMedia 的环境：只是少了这次重量 */ }
     sync();
@@ -209,22 +220,80 @@
 
   /* 判断正文有没有被裁。
      不能只看 `scrollHeight > clientHeight`：那是 `-webkit-line-clamp` 下的实现细节，
-     各浏览器口径不一致，验不准。改成**临时取消裁剪量一次真实高度**再比 —— 谁都认。 */
+     各浏览器口径不一致，验不准。改成**临时取消裁剪量一次真实高度**再比 —— 谁都认。
+     2026-10-17 起长正文**默认展开**（用户：手机电脑都要默认展开，不要默认收起），但**放得下才展开**（用户二选一选的）。
+     「放得下」＝ 展开后截图仍 ≥ 屏宽 46%（跟 verify.js / verify-immersion 的下限同一个数，手机竖屏就看这条）；
+     或者截图本来就被高度限住、收起时也不到 46%（横屏手机、iPad、电脑），那就看展开让截图窄了多少，≤15% 也算放得下
+     （15% 是自己定的分寸，没有出处）。
+     电脑版式另算：用户要「电脑也默认展开」，而电脑截图本来就被高度限住、展开一两行就会窄 15% 以上——
+     所以电脑上一律展开，只防极端长文：展开会把截图挤到不到收起时一半宽才先收着（「一半」也是自己定的）。
+     · 用户亲手点过的（data-folded：1 收起 / 0 展开）照用户的来，转屏改窗口也不改
+     · 自动判过的（data-auto）屏宽不变就沿用：iPhone Safari 一滑动工具栏就出没、触发 resize，只变高度——
+       跟着重判会让正在读的这一步自己开合（审查指出）。转屏、拖窗口宽度才重判
+     · 长文模式不裁正文，不用量（切回逐步时 setMode 会重量）；正在播展开动画的那一步不量（高度被钉住，量不准）
+     量的时候临时摘掉/加上 .open，同一帧里完成，不会闪；展开着的卡片里滚到一半，重量后滚动位置放回去 */
+  const DESK_Q = '(min-width:900px) and (any-hover:hover) and (any-pointer:fine)';   // 跟 reader.css「电脑版式」那条一致
+  const FIT_MIN = 0.46, FIT_LOSS = 0.15, FIT_DESK = 0.5;
+  window.__sgFit = { FIT_MIN, FIT_LOSS, FIT_DESK };   // 给自动化测试读，测试不再自己抄一份数字（会跟代码对不上）
+  let mt = 0;
+  function remeasureSoon() { clearTimeout(mt); mt = setTimeout(measureClamp, 120); }
+  /** 当前状态下这一页的截图会有多宽：截图区的可用宽高 + 截图宽高比算出来，再按原始宽度封顶
+      （不看图的渲染宽度，没加载的图那是 2px）。不知道宽高比就返回 0 */
+  function shotWidth(p) {
+    const shot = p.querySelector('.shot');
+    if (!shot || !p._ratio) return 0;
+    const cs = getComputedStyle(shot);
+    const w = shot.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const h = shot.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    return Math.min(w, h * p._ratio, p._natW || Infinity);
+  }
+  const fits = (w0, w1, vw, desk) => w1 > 0 && (desk ? w1 >= w0 * FIT_DESK
+    : (w1 >= vw * FIT_MIN || (w0 < vw * FIT_MIN && w1 >= w0 * (1 - FIT_LOSS))));
   function measureClamp() {
+    if (mode() !== 'step') {
+      // 长文模式不量，但「可展开按钮」的标记要摘掉：不然读屏软件会读出一个点了没反应的按钮
+      document.querySelectorAll('.page .say').forEach(say => { say.removeAttribute('role'); say.removeAttribute('tabindex'); say.removeAttribute('aria-expanded'); });
+      return;
+    }
+    const vw = innerWidth;
+    let desk = false;
+    try { desk = matchMedia(DESK_Q).matches; } catch (e) { /* 老环境：当手机处理 */ }
+    /* 自动判过的结果按这个键沿用：手机只看屏宽（Safari 工具栏出没只改高度，别跟着开合）；
+       电脑窗口的高度是用户主动拖的、截图又被高度限住，宽高任一变了都要重判（审查指出） */
+    const key = desk ? vw + 'x' + innerHeight + 'd' : String(vw);
+    let busy = false;
     document.querySelectorAll('.page').forEach(p => {
       const say = p._say, para = say && say.querySelector('.txt p');
       if (!para) return;
-      if (say.classList.contains('open')) return;          // 已展开的不动
+      if (say.style.height) { busy = true; return; }        // 正在播展开/收起动画：高度被钉住量不准，等播完再补量
+      const top = say.scrollTop;
+      say.classList.remove('open');                         // 展开着量不出「收起时被裁没被裁」
       const shown = para.clientHeight;
       para.classList.add('unclamp');
       const full = para.scrollHeight;
       para.classList.remove('unclamp');
       const cut = full > shown + 1;
+      // 提示先摆出来再量：展开时「收起」单独占一行，没算进去会把卡片少量 26px、误判成放得下
       if (p._more) p._more.hidden = !cut;
+      const f = say.dataset.folded;
+      let open;
+      if (!cut || f === '1') open = false;
+      else if (f === '0') open = true;
+      else if (say.dataset.autoW === key) open = say.dataset.auto === '1';
+      else {
+        const w0 = shotWidth(p);
+        say.classList.add('open');
+        open = fits(w0, shotWidth(p), vw, desk);
+        if (p._ratio) { say.dataset.auto = open ? '1' : '0'; say.dataset.autoW = key; }   // 宽高比未知时不锁，图加载完再判；接拔鼠标换了版式也重判
+      }
+      say.classList.toggle('open', open);
+      if (open && top) say.scrollTop = top;
+      if (p._more) p._more.querySelector('.more-t').textContent = open ? '收起' : '更多';
       say.classList.toggle('can-open', cut);
-      if (cut) { say.setAttribute('role', 'button'); say.tabIndex = 0; }
-      else { say.removeAttribute('role'); say.removeAttribute('tabindex'); }
+      if (cut) { say.setAttribute('role', 'button'); say.tabIndex = 0; say.setAttribute('aria-expanded', String(open)); }
+      else { say.removeAttribute('role'); say.removeAttribute('tabindex'); say.removeAttribute('aria-expanded'); }
     });
+    if (busy) remeasureSoon();
   }
 
   /* 展开/收起要有过渡，不能"啪"地跳一下。
